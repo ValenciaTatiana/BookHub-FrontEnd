@@ -706,557 +706,560 @@
     </section>
 </main>
 <script>
-const api = {
-    libros: '/api/libros',
-    usuarios: '/api/usuarios',
-    prestamos: '/api/prestamos'
-};
+    const base = "http://localhost:8080/api";
 
-const messageTimers = {};
-
-const summaryElements = {
-    totalLibros: document.getElementById('summary-total-libros'),
-    librosDisponibles: document.getElementById('summary-libros-disponibles'),
-    totalUsuarios: document.getElementById('summary-total-usuarios'),
-    prestamosActivos: document.getElementById('summary-prestamos-activos')
-};
-
-function updateSummary(key, value) {
-    const element = summaryElements[key];
-    if (!element) {
-        return;
-    }
-    if (typeof value === 'number' && Number.isFinite(value)) {
-        element.textContent = value;
-        return;
-    }
-    element.textContent = value || '-';
-}
-
-function initNavigation() {
-    const buttons = document.querySelectorAll('.nav-btn');
-    const panels = document.querySelectorAll('.panel');
-    buttons.forEach((button) => {
-        button.addEventListener('click', () => {
-            const target = button.dataset.panel;
-            buttons.forEach((btn) => btn.classList.toggle('active', btn === button));
-            panels.forEach((panel) => panel.classList.toggle('active', panel.id === target));
-            const destination = document.getElementById(target);
-            if (destination) {
-                destination.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        });
-    });
-}
-
-function setMessage(id, text, type = '') {
-    const el = document.getElementById(id);
-    if (!el) {
-        return;
-    }
-    const normalized = normalizeMessage(text);
-    el.textContent = normalized;
-    el.className = type ? `message ${type}` : 'message';
-
-    if (messageTimers[id]) {
-        clearTimeout(messageTimers[id]);
-        delete messageTimers[id];
-    }
-
-    const shouldShow = Boolean(normalized);
-    el.hidden = !shouldShow;
-    if (shouldShow && type !== 'subtle') {
-        const timeout = type === 'error' ? 7000 : 5000;
-        messageTimers[id] = setTimeout(() => {
-            el.textContent = '';
-            el.className = 'message';
-            el.hidden = true;
-            delete messageTimers[id];
-        }, timeout);
-    }
-}
-
-function normalizeMessage(raw) {
-    if (raw === undefined || raw === null) {
-        return '';
-    }
-    if (typeof raw === 'string') {
-        return raw;
-    }
-    if (typeof raw === 'object') {
-        if (Array.isArray(raw)) {
-            return raw.map((item) => normalizeMessage(item)).join(', ');
-        }
-        if (raw.message) {
-            return normalizeMessage(raw.message);
-        }
-        if (raw.error) {
-            return normalizeMessage(raw.error);
-        }
-        if (raw.errors) {
-            return normalizeMessage(raw.errors);
-        }
-        return JSON.stringify(raw);
-    }
-    return String(raw);
-}
-
-async function parseResponse(res) {
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-        const json = await res.json();
-        return normalizeMessage(json);
-    }
-    const text = await res.text();
-    return text || res.statusText || 'Ocurrio un error inesperado';
-}
-
-async function cargarLibros(q = '') {
-    const url = q ? `${api.libros}/buscar?q=${encodeURIComponent(q)}` : api.libros;
-    try {
-        const res = await fetch(url);
-        if (!res.ok) {
-            throw new Error(await res.text() || 'No se pudo obtener la lista de libros');
-        }
-        const data = await res.json();
-        renderLibros(data);
-        updateSummary('totalLibros', data.length);
-        const disponibles = data.filter((libro) => libro.disponible).length;
-        updateSummary('librosDisponibles', disponibles);
-        setMessage('libros-msg', `${data.length} libro(s) cargado(s)`, 'success');
-    } catch (error) {
-        renderLibros([]);
-        updateSummary('totalLibros', 0);
-        updateSummary('librosDisponibles', 0);
-        setMessage('libros-msg', error.message, 'error');
-    }
-}
-
-function renderLibros(libros) {
-    const body = document.getElementById('tabla-libros');
-    if (!body) {
-        return;
-    }
-    body.innerHTML = '';
-    if (!Array.isArray(libros) || libros.length === 0) {
-        body.innerHTML = '<tr><td colspan="6">Sin registros</td></tr>';
-        return;
-    }
-    libros.forEach((libro) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${libro.isbn}</td>
-            <td>${libro.titulo}</td>
-            <td>${libro.autor}</td>
-            <td>${libro.categoria ?? '-'}</td>
-            <td><span class="tag ${libro.disponible ? 'available' : 'unavailable'}">${libro.disponible ? 'Disponible' : 'Prestado'}</span></td>
-            <td>
-                <div class="pill-buttons">
-                    <button class="secondary small-btn" data-action="editar">Editar</button>
-                    <button class="ghost small-btn danger" data-action="eliminar">Eliminar</button>
-                    <button class="small-btn ${libro.disponible ? 'danger' : 'success'}" data-action="toggle">
-                        ${libro.disponible ? 'Marcar prestado' : 'Marcar disponible'}
-                    </button>
-                </div>
-            </td>
-        `;
-        tr.querySelector('[data-action="editar"]').addEventListener('click', () => cargarLibroEdicion(libro));
-        tr.querySelector('[data-action="toggle"]').addEventListener('click', () => cambiarEstadoLibro(libro));
-        tr.querySelector('[data-action="eliminar"]').addEventListener('click', () => eliminarLibro(libro));
-        body.appendChild(tr);
-    });
-}
-
-function cargarLibroEdicion(libro) {
-    const form = document.getElementById('form-actualizar-libro');
-    if (!form) {
-        return;
-    }
-    form.isbn.value = libro.isbn;
-    form.titulo.value = libro.titulo ?? '';
-    form.autor.value = libro.autor ?? '';
-    form.categoria.value = libro.categoria ?? '';
-    form.disponible.value = libro.disponible ? 'true' : 'false';
-    setMessage('editar-libro-msg', `Libro ${libro.isbn} listo para editar`, 'success');
-}
-
-function limpiarEdicionLibro() {
-    const form = document.getElementById('form-actualizar-libro');
-    if (!form) {
-        return;
-    }
-    form.reset();
-    form.isbn.value = '';
-    setMessage('editar-libro-msg', 'Selecciona un libro en la tabla para editarlo', 'subtle');
-}
-
-async function registrarLibro(event) {
-    event.preventDefault();
-    const formData = new FormData(event.target);
-    try {
-        const res = await fetch(api.libros, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(Object.fromEntries(formData))
-        });
-        if (!res.ok) {
-            throw new Error(await parseResponse(res));
-        }
-        event.target.reset();
-        limpiarEdicionLibro();
-        setMessage('libros-msg', 'Libro registrado correctamente', 'success');
-        await cargarLibros();
-    } catch (error) {
-        setMessage('libros-msg', error.message || 'No se pudo registrar el libro', 'error');
-    }
-}
-
-async function actualizarLibro(event) {
-    event.preventDefault();
-    const form = event.target;
-    if (!form.isbn.value) {
-        setMessage('editar-libro-msg', 'Selecciona primero un libro de la tabla', 'error');
-        return;
-    }
-    const payload = {
-        titulo: form.titulo.value,
-        autor: form.autor.value,
-        categoria: form.categoria.value,
-        disponible: form.disponible.value === 'true'
+    const api = {
+        libros: `${base}/libros`,
+        usuarios: `${base}/usuarios`,
+        prestamos: `${base}/prestamos`
     };
-    try {
-        const res = await fetch(`${api.libros}/${encodeURIComponent(form.isbn.value)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+
+
+    const messageTimers = {};
+
+    const summaryElements = {
+        totalLibros: document.getElementById('summary-total-libros'),
+        librosDisponibles: document.getElementById('summary-libros-disponibles'),
+        totalUsuarios: document.getElementById('summary-total-usuarios'),
+        prestamosActivos: document.getElementById('summary-prestamos-activos')
+    };
+
+    function updateSummary(key, value) {
+        const element = summaryElements[key];
+        if (!element) {
+            return;
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            element.textContent = value;
+            return;
+        }
+        element.textContent = value || '-';
+    }
+
+    function initNavigation() {
+        const buttons = document.querySelectorAll('.nav-btn');
+        const panels = document.querySelectorAll('.panel');
+        buttons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const target = button.dataset.panel;
+                buttons.forEach((btn) => btn.classList.toggle('active', btn === button));
+                panels.forEach((panel) => panel.classList.toggle('active', panel.id === target));
+                const destination = document.getElementById(target);
+                if (destination) {
+                    destination.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
         });
-        if (!res.ok) {
-            throw new Error(await parseResponse(res));
+    }
+
+    function setMessage(id, text, type = '') {
+        const el = document.getElementById(id);
+        if (!el) {
+            return;
         }
-        setMessage('editar-libro-msg', 'Libro actualizado correctamente', 'success');
-        await cargarLibros();
-    } catch (error) {
-        setMessage('editar-libro-msg', error.message || 'No se pudo actualizar el libro', 'error');
-    }
-}
+        const normalized = normalizeMessage(text);
+        el.textContent = normalized;
+        el.className = type ? `message ${type}` : 'message';
 
-async function cambiarEstadoLibro(libro) {
-    const disponible = !libro.disponible;
-    try {
-        const res = await fetch(`${api.libros}/${encodeURIComponent(libro.isbn)}/estado`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ disponible })
-        });
-        if (!res.ok) {
-            throw new Error(await parseResponse(res));
+        if (messageTimers[id]) {
+            clearTimeout(messageTimers[id]);
+            delete messageTimers[id];
         }
-        setMessage('libros-msg', `El estado del libro ${libro.isbn} se actualizo correctamente`, 'success');
-        await cargarLibros();
-    } catch (error) {
-        setMessage('libros-msg', error.message || 'No se pudo actualizar el estado del libro', 'error');
-    }
-}
 
-async function eliminarLibro(libro) {
-    const label = libro.titulo ? `${libro.titulo} (${libro.isbn})` : libro.isbn;
-    const confirmed = window.confirm(`Eliminar el libro ${label}? Esta accion no se puede deshacer.`);
-    if (!confirmed) {
-        return;
-    }
-    try {
-        const res = await fetch(`${api.libros}/${encodeURIComponent(libro.isbn)}`, {
-            method: 'DELETE'
-        });
-        if (!res.ok) {
-            throw new Error(await parseResponse(res));
+        const shouldShow = Boolean(normalized);
+        el.hidden = !shouldShow;
+        if (shouldShow && type !== 'subtle') {
+            const timeout = type === 'error' ? 7000 : 5000;
+            messageTimers[id] = setTimeout(() => {
+                el.textContent = '';
+                el.className = 'message';
+                el.hidden = true;
+                delete messageTimers[id];
+            }, timeout);
         }
-        setMessage('libros-msg', `Libro ${libro.isbn} eliminado correctamente`, 'success');
-        await cargarLibros();
-        limpiarEdicionLibro();
-    } catch (error) {
-        setMessage('libros-msg', error.message || 'No se pudo eliminar el libro', 'error');
     }
-}
 
-function isNumericValue(value) {
-    return value !== null && value !== undefined && value !== '' && !Number.isNaN(Number(value));
-}
-
-async function cargarUsuarios() {
-    try {
-        const res = await fetch(api.usuarios);
-        if (!res.ok) {
-            throw new Error(await res.text() || 'No se pudo obtener la lista de usuarios');
+    function normalizeMessage(raw) {
+        if (raw === undefined || raw === null) {
+            return '';
         }
-        const data = await res.json();
-        await renderUsuarios(data);
-        updateSummary('totalUsuarios', data.length);
-        setMessage('usuarios-msg', `${data.length} usuario(s) cargado(s)`, 'success');
-    } catch (error) {
-        await renderUsuarios([]);
-        updateSummary('totalUsuarios', 0);
-        setMessage('usuarios-msg', error.message, 'error');
+        if (typeof raw === 'string') {
+            return raw;
+        }
+        if (typeof raw === 'object') {
+            if (Array.isArray(raw)) {
+                return raw.map((item) => normalizeMessage(item)).join(', ');
+            }
+            if (raw.message) {
+                return normalizeMessage(raw.message);
+            }
+            if (raw.error) {
+                return normalizeMessage(raw.error);
+            }
+            if (raw.errors) {
+                return normalizeMessage(raw.errors);
+            }
+            return JSON.stringify(raw);
+        }
+        return String(raw);
     }
-}
 
-async function renderUsuarios(usuarios) {
-    const body = document.getElementById('tabla-usuarios');
-    if (!body) {
-        return;
+    async function parseResponse(res) {
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+            const json = await res.json();
+            return normalizeMessage(json);
+        }
+        const text = await res.text();
+        return text || res.statusText || 'Ocurrio un error inesperado';
     }
-    body.innerHTML = '';
-    if (!Array.isArray(usuarios) || usuarios.length === 0) {
-        body.innerHTML = '<tr><td colspan="5">Sin registros</td></tr>';
-        return;
+
+    async function cargarLibros(q = '') {
+        const url = q ? `${api.libros}/buscar?q=${encodeURIComponent(q)}` : api.libros;
+        try {
+            const res = await fetch(url);
+            if (!res.ok) {
+                throw new Error(await res.text() || 'No se pudo obtener la lista de libros');
+            }
+            const data = await res.json();
+            renderLibros(data);
+            updateSummary('totalLibros', data.length);
+            const disponibles = data.filter((libro) => libro.disponible).length;
+            updateSummary('librosDisponibles', disponibles);
+            setMessage('libros-msg', `${data.length} libro(s) cargado(s)`, 'success');
+        } catch (error) {
+            renderLibros([]);
+            updateSummary('totalLibros', 0);
+            updateSummary('librosDisponibles', 0);
+            setMessage('libros-msg', error.message, 'error');
+        }
     }
-    const filas = await Promise.all(
-        usuarios.map(async (usuario) => {
-            const activos = await obtenerPrestamosActivosUsuario(usuario.id, true);
-            return `
-                <tr>
-                    <td>${usuario.id}</td>
-                    <td>${usuario.nombre}</td>
-                    <td>${usuario.email}</td>
-                    <td>${usuario.telefono ?? '-'}</td>
-                    <td>${activos}</td>
-                </tr>
+
+    function renderLibros(libros) {
+        const body = document.getElementById('tabla-libros');
+        if (!body) {
+            return;
+        }
+        body.innerHTML = '';
+        if (!Array.isArray(libros) || libros.length === 0) {
+            body.innerHTML = '<tr><td colspan="6">Sin registros</td></tr>';
+            return;
+        }
+        libros.forEach((libro) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${libro.isbn}</td>
+                <td>${libro.titulo}</td>
+                <td>${libro.autor}</td>
+                <td>${libro.categoria ?? '-'}</td>
+                <td><span class="tag ${libro.disponible ? 'available' : 'unavailable'}">${libro.disponible ? 'Disponible' : 'Prestado'}</span></td>
+                <td>
+                    <div class="pill-buttons">
+                        <button class="secondary small-btn" data-action="editar">Editar</button>
+                        <button class="ghost small-btn danger" data-action="eliminar">Eliminar</button>
+                        <button class="small-btn ${libro.disponible ? 'danger' : 'success'}" data-action="toggle">
+                            ${libro.disponible ? 'Marcar prestado' : 'Marcar disponible'}
+                        </button>
+                    </div>
+                </td>
             `;
-        })
-    );
-    body.innerHTML = filas.join('');
-}
-
-async function obtenerPrestamosActivosUsuario(id, soloCantidad = false) {
-    if (!isNumericValue(id)) {
-        return soloCantidad ? 0 : [];
+            tr.querySelector('[data-action="editar"]').addEventListener('click', () => cargarLibroEdicion(libro));
+            tr.querySelector('[data-action="toggle"]').addEventListener('click', () => cambiarEstadoLibro(libro));
+            tr.querySelector('[data-action="eliminar"]').addEventListener('click', () => eliminarLibro(libro));
+            body.appendChild(tr);
+        });
     }
-    try {
-        const res = await fetch(`${api.usuarios}/${id}/prestamos/activos`);
-        if (!res.ok) {
-            throw new Error(await res.text());
+
+    function cargarLibroEdicion(libro) {
+        const form = document.getElementById('form-actualizar-libro');
+        if (!form) {
+            return;
         }
-        const data = await res.json();
-        return soloCantidad ? data.length : data;
-    } catch (error) {
-        if (!soloCantidad) {
+        form.isbn.value = libro.isbn;
+        form.titulo.value = libro.titulo ?? '';
+        form.autor.value = libro.autor ?? '';
+        form.categoria.value = libro.categoria ?? '';
+        form.disponible.value = libro.disponible ? 'true' : 'false';
+        setMessage('editar-libro-msg', `Libro ${libro.isbn} listo para editar`, 'success');
+    }
+
+    function limpiarEdicionLibro() {
+        const form = document.getElementById('form-actualizar-libro');
+        if (!form) {
+            return;
+        }
+        form.reset();
+        form.isbn.value = '';
+        setMessage('editar-libro-msg', 'Selecciona un libro en la tabla para editarlo', 'subtle');
+    }
+
+    async function registrarLibro(event) {
+        event.preventDefault();
+        const formData = new FormData(event.target);
+        try {
+            const res = await fetch(api.libros, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(Object.fromEntries(formData))
+            });
+            if (!res.ok) {
+                throw new Error(await parseResponse(res));
+            }
+            event.target.reset();
+            limpiarEdicionLibro();
+            setMessage('libros-msg', 'Libro registrado correctamente', 'success');
+            await cargarLibros();
+        } catch (error) {
+            setMessage('libros-msg', error.message || 'No se pudo registrar el libro', 'error');
+        }
+    }
+
+    async function actualizarLibro(event) {
+        event.preventDefault();
+        const form = event.target;
+        if (!form.isbn.value) {
+            setMessage('editar-libro-msg', 'Selecciona primero un libro de la tabla', 'error');
+            return;
+        }
+        const payload = {
+            titulo: form.titulo.value,
+            autor: form.autor.value,
+            categoria: form.categoria.value,
+            disponible: form.disponible.value === 'true'
+        };
+        try {
+            const res = await fetch(`${api.libros}/${encodeURIComponent(form.isbn.value)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) {
+                throw new Error(await parseResponse(res));
+            }
+            setMessage('editar-libro-msg', 'Libro actualizado correctamente', 'success');
+            await cargarLibros();
+        } catch (error) {
+            setMessage('editar-libro-msg', error.message || 'No se pudo actualizar el libro', 'error');
+        }
+    }
+
+    async function cambiarEstadoLibro(libro) {
+        const disponible = !libro.disponible;
+        try {
+            const res = await fetch(`${api.libros}/${encodeURIComponent(libro.isbn)}/estado`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ disponible })
+            });
+            if (!res.ok) {
+                throw new Error(await parseResponse(res));
+            }
+            setMessage('libros-msg', `El estado del libro ${libro.isbn} se actualizo correctamente`, 'success');
+            await cargarLibros();
+        } catch (error) {
+            setMessage('libros-msg', error.message || 'No se pudo actualizar el estado del libro', 'error');
+        }
+    }
+
+    async function eliminarLibro(libro) {
+        const label = libro.titulo ? `${libro.titulo} (${libro.isbn})` : libro.isbn;
+        const confirmed = window.confirm(`Eliminar el libro ${label}? Esta accion no se puede deshacer.`);
+        if (!confirmed) {
+            return;
+        }
+        try {
+            const res = await fetch(`${api.libros}/${encodeURIComponent(libro.isbn)}`, {
+                method: 'DELETE'
+            });
+            if (!res.ok) {
+                throw new Error(await parseResponse(res));
+            }
+            setMessage('libros-msg', `Libro ${libro.isbn} eliminado correctamente`, 'success');
+            await cargarLibros();
+            limpiarEdicionLibro();
+        } catch (error) {
+            setMessage('libros-msg', error.message || 'No se pudo eliminar el libro', 'error');
+        }
+    }
+
+    function isNumericValue(value) {
+        return value !== null && value !== undefined && value !== '' && !Number.isNaN(Number(value));
+    }
+
+    async function cargarUsuarios() {
+        try {
+            const res = await fetch(api.usuarios);
+            if (!res.ok) {
+                throw new Error(await res.text() || 'No se pudo obtener la lista de usuarios');
+            }
+            const data = await res.json();
+            await renderUsuarios(data);
+            updateSummary('totalUsuarios', data.length);
+            setMessage('usuarios-msg', `${data.length} usuario(s) cargado(s)`, 'success');
+        } catch (error) {
+            await renderUsuarios([]);
+            updateSummary('totalUsuarios', 0);
             setMessage('usuarios-msg', error.message, 'error');
         }
-        return soloCantidad ? 0 : [];
     }
-}
 
-async function registrarUsuario(event) {
-    event.preventDefault();
-    const payload = Object.fromEntries(new FormData(event.target));
-    try {
-        const res = await fetch(api.usuarios, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        if (!res.ok) {
-            throw new Error(await parseResponse(res));
+    async function renderUsuarios(usuarios) {
+        const body = document.getElementById('tabla-usuarios');
+        if (!body) {
+            return;
         }
-        event.target.reset();
-        setMessage('usuarios-msg', 'Usuario registrado correctamente', 'success');
-        await cargarUsuarios();
-    } catch (error) {
-        setMessage('usuarios-msg', error.message || 'No se pudo registrar el usuario', 'error');
-    }
-}
-
-async function consultarUsuario() {
-    const id = document.getElementById('consultar-usuario-id').value;
-    if (!isNumericValue(id)) {
-        setMessage('usuario-detalle', 'Ingresa un ID valido', 'error');
-        return;
-    }
-    try {
-        const res = await fetch(`${api.usuarios}/${id}`);
-        if (!res.ok) {
-            throw new Error(await res.text() || 'Usuario no encontrado');
+        body.innerHTML = '';
+        if (!Array.isArray(usuarios) || usuarios.length === 0) {
+            body.innerHTML = '<tr><td colspan="5">Sin registros</td></tr>';
+            return;
         }
-        const data = await res.json();
-        setMessage('usuario-detalle', `Usuario: ${data.nombre} | Email: ${data.email} | Tel: ${data.telefono ?? '-'}`, 'success');
-    } catch (error) {
-        setMessage('usuario-detalle', error.message, 'error');
+        const filas = await Promise.all(
+            usuarios.map(async (usuario) => {
+                const activos = await obtenerPrestamosActivosUsuario(usuario.id, true);
+                return `
+                    <tr>
+                        <td>${usuario.id}</td>
+                        <td>${usuario.nombre}</td>
+                        <td>${usuario.email}</td>
+                        <td>${usuario.telefono ?? '-'}</td>
+                        <td>${activos}</td>
+                    </tr>
+                `;
+            })
+        );
+        body.innerHTML = filas.join('');
     }
-}
 
-async function validarPuedePrestar() {
-    const id = document.getElementById('consultar-usuario-id').value;
-    if (!isNumericValue(id)) {
-        setMessage('usuario-detalle', 'Ingresa un ID valido', 'error');
-        return;
-    }
-    try {
-        const res = await fetch(`${api.usuarios}/${id}/puede-prestar`);
-        if (!res.ok) {
-            throw new Error(await res.text());
+    async function obtenerPrestamosActivosUsuario(id, soloCantidad = false) {
+        if (!isNumericValue(id)) {
+            return soloCantidad ? 0 : [];
         }
-        const data = await res.json();
-        setMessage('usuario-detalle', data.puedePrestar ? 'Puede realizar un nuevo prestamo.' : 'No puede prestar (RN001).', data.puedePrestar ? 'success' : 'error');
-    } catch (error) {
-        setMessage('usuario-detalle', error.message, 'error');
-    }
-}
-
-async function cargarPrestamosActivos() {
-    try {
-        const res = await fetch(`${api.prestamos}/activos`);
-        if (!res.ok) {
-            throw new Error(await res.text());
+        try {
+            const res = await fetch(`${api.usuarios}/${id}/prestamos/activos`);
+            if (!res.ok) {
+                throw new Error(await res.text());
+            }
+            const data = await res.json();
+            return soloCantidad ? data.length : data;
+        } catch (error) {
+            if (!soloCantidad) {
+                setMessage('usuarios-msg', error.message, 'error');
+            }
+            return soloCantidad ? 0 : [];
         }
-        const data = await res.json();
-        renderPrestamos(data);
-        updateSummary('prestamosActivos', data.length);
-        setMessage('prestamos-msg', `${data.length} prestamo(s) activo(s)`, 'success');
-    } catch (error) {
-        renderPrestamos([]);
-        updateSummary('prestamosActivos', 0);
-        setMessage('prestamos-msg', error.message, 'error');
     }
-}
 
-function renderPrestamos(prestamos) {
-    const body = document.getElementById('tabla-prestamos');
-    if (!body) {
-        return;
-    }
-    body.innerHTML = '';
-    if (!Array.isArray(prestamos) || prestamos.length === 0) {
-        body.innerHTML = '<tr><td colspan="6">Sin registros</td></tr>';
-        return;
-    }
-    prestamos.forEach((prestamo) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${prestamo.id ?? '-'}</td>
-            <td>${prestamo.usuarioId}</td>
-            <td>${prestamo.libroIsbn}</td>
-            <td>${prestamo.fechaPrestamo ?? '-'}</td>
-            <td>${prestamo.fechaDevolucion ?? '-'}</td>
-            <td>${prestamo.estado ? '<span class="tag available">Activo</span>' : '<span class="tag unavailable">Devuelto</span>'}</td>
-        `;
-        body.appendChild(tr);
-    });
-}
-
-async function crearPrestamo(event) {
-    event.preventDefault();
-    const data = Object.fromEntries(new FormData(event.target));
-    data.usuarioId = Number(data.usuarioId);
-    try {
-        const res = await fetch(api.prestamos, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (!res.ok) {
-            throw new Error(await parseResponse(res));
-        }
-        event.target.reset();
-        setMessage('prestamos-msg', 'Prestamo registrado correctamente', 'success');
-        await cargarPrestamosActivos();
-        await cargarLibros();
-        await cargarUsuarios();
-    } catch (error) {
-        setMessage('prestamos-msg', error.message, 'error');
-    }
-}
-
-async function devolverPrestamo(event) {
-    event.preventDefault();
-    const data = Object.fromEntries(new FormData(event.target));
-    data.usuarioId = Number(data.usuarioId);
-    try {
-        const res = await fetch(`${api.prestamos}/devolver`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (!res.ok) {
-            throw new Error(await parseResponse(res));
-        }
-        event.target.reset();
-        setMessage('prestamos-msg', 'Devolucion registrada correctamente', 'success');
-        await cargarPrestamosActivos();
-        await cargarLibros();
-        await cargarUsuarios();
-    } catch (error) {
-        setMessage('prestamos-msg', error.message, 'error');
-    }
-}
-
-async function verPrestamosUsuario(tipo) {
-    const id = document.getElementById('prestamos-usuario-id').value;
-    if (!isNumericValue(id)) {
-        setMessage('prestamos-msg', 'Ingresa un ID de usuario', 'error');
-        return;
-    }
-    const endpoint = tipo === 'historial' ? 'historial' : 'activos';
-    try {
-        const res = await fetch(`${api.prestamos}/usuario/${id}/${endpoint}`);
-        if (!res.ok) {
-            throw new Error(await res.text());
-        }
-        const data = await res.json();
-        renderPrestamos(data);
-        setMessage('prestamos-msg', `${data.length} registro(s) encontrados`, 'success');
-    } catch (error) {
-        renderPrestamos([]);
-        setMessage('prestamos-msg', error.message, 'error');
-    }
-}
-
-async function verLibrosDisponiblesDesdePrestamos() {
-    try {
-        const res = await fetch(`${api.prestamos}/libros-disponibles`);
-        if (!res.ok) {
-            throw new Error(await res.text());
-        }
-        const data = await res.json();
-        renderLibros(data);
-        updateSummary('librosDisponibles', data.length);
-        setMessage('libros-msg', `${data.length} libro(s) disponibles para prestamo`, 'success');
-        setMessage('prestamos-msg', 'Mostrando libros disponibles para prestamo', 'success');
-    } catch (error) {
-        setMessage('prestamos-msg', error.message, 'error');
-    }
-}
-
-window.addEventListener('DOMContentLoaded', () => {
-    initNavigation();
-    limpiarEdicionLibro();
-    cargarLibros();
-    cargarUsuarios();
-    cargarPrestamosActivos();
-
-    document.getElementById('form-crear-libro').addEventListener('submit', registrarLibro);
-    document.getElementById('form-buscar-libro').addEventListener('submit', (event) => {
+    async function registrarUsuario(event) {
         event.preventDefault();
-        const termino = new FormData(event.target).get('termino')?.trim();
-        cargarLibros(termino);
-    });
-    document.getElementById('btn-refrescar-libros').addEventListener('click', () => {
-        document.getElementById('form-buscar-libro').reset();
+        const payload = Object.fromEntries(new FormData(event.target));
+        try {
+            const res = await fetch(api.usuarios, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) {
+                throw new Error(await parseResponse(res));
+            }
+            event.target.reset();
+            setMessage('usuarios-msg', 'Usuario registrado correctamente', 'success');
+            await cargarUsuarios();
+        } catch (error) {
+            setMessage('usuarios-msg', error.message || 'No se pudo registrar el usuario', 'error');
+        }
+    }
+
+    async function consultarUsuario() {
+        const id = document.getElementById('consultar-usuario-id').value;
+        if (!isNumericValue(id)) {
+            setMessage('usuario-detalle', 'Ingresa un ID valido', 'error');
+            return;
+        }
+        try {
+            const res = await fetch(`${api.usuarios}/${id}`);
+            if (!res.ok) {
+                throw new Error(await res.text() || 'Usuario no encontrado');
+            }
+            const data = await res.json();
+            setMessage('usuario-detalle', `Usuario: ${data.nombre} | Email: ${data.email} | Tel: ${data.telefono ?? '-'}`, 'success');
+        } catch (error) {
+            setMessage('usuario-detalle', error.message, 'error');
+        }
+    }
+
+    async function validarPuedePrestar() {
+        const id = document.getElementById('consultar-usuario-id').value;
+        if (!isNumericValue(id)) {
+            setMessage('usuario-detalle', 'Ingresa un ID valido', 'error');
+            return;
+        }
+        try {
+            const res = await fetch(`${api.usuarios}/${id}/puede-prestar`);
+            if (!res.ok) {
+                throw new Error(await res.text());
+            }
+            const data = await res.json();
+            setMessage('usuario-detalle', data.puedePrestar ? 'Puede realizar un nuevo prestamo.' : 'No puede prestar (RN001).', data.puedePrestar ? 'success' : 'error');
+        } catch (error) {
+            setMessage('usuario-detalle', error.message, 'error');
+        }
+    }
+
+    async function cargarPrestamosActivos() {
+        try {
+            const res = await fetch(`${api.prestamos}/activos`);
+            if (!res.ok) {
+                throw new Error(await res.text());
+            }
+            const data = await res.json();
+            renderPrestamos(data);
+            updateSummary('prestamosActivos', data.length);
+            setMessage('prestamos-msg', `${data.length} prestamo(s) activo(s)`, 'success');
+        } catch (error) {
+            renderPrestamos([]);
+            updateSummary('prestamosActivos', 0);
+            setMessage('prestamos-msg', error.message, 'error');
+        }
+    }
+
+    function renderPrestamos(prestamos) {
+        const body = document.getElementById('tabla-prestamos');
+        if (!body) {
+            return;
+        }
+        body.innerHTML = '';
+        if (!Array.isArray(prestamos) || prestamos.length === 0) {
+            body.innerHTML = '<tr><td colspan="6">Sin registros</td></tr>';
+            return;
+        }
+        prestamos.forEach((prestamo) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${prestamo.id ?? '-'}</td>
+                <td>${prestamo.usuarioId}</td>
+                <td>${prestamo.libroIsbn}</td>
+                <td>${prestamo.fechaPrestamo ?? '-'}</td>
+                <td>${prestamo.fechaDevolucion ?? '-'}</td>
+                <td>${prestamo.estado ? '<span class="tag available">Activo</span>' : '<span class="tag unavailable">Devuelto</span>'}</td>
+            `;
+            body.appendChild(tr);
+        });
+    }
+
+    async function crearPrestamo(event) {
+        event.preventDefault();
+        const data = Object.fromEntries(new FormData(event.target));
+        data.usuarioId = Number(data.usuarioId);
+        try {
+            const res = await fetch(api.prestamos, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) {
+                throw new Error(await parseResponse(res));
+            }
+            event.target.reset();
+            setMessage('prestamos-msg', 'Prestamo registrado correctamente', 'success');
+            await cargarPrestamosActivos();
+            await cargarLibros();
+            await cargarUsuarios();
+        } catch (error) {
+            setMessage('prestamos-msg', error.message, 'error');
+        }
+    }
+
+    async function devolverPrestamo(event) {
+        event.preventDefault();
+        const data = Object.fromEntries(new FormData(event.target));
+        data.usuarioId = Number(data.usuarioId);
+        try {
+            const res = await fetch(`${api.prestamos}/devolver`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) {
+                throw new Error(await parseResponse(res));
+            }
+            event.target.reset();
+            setMessage('prestamos-msg', 'Devolucion registrada correctamente', 'success');
+            await cargarPrestamosActivos();
+            await cargarLibros();
+            await cargarUsuarios();
+        } catch (error) {
+            setMessage('prestamos-msg', error.message, 'error');
+        }
+    }
+
+    async function verPrestamosUsuario(tipo) {
+        const id = document.getElementById('prestamos-usuario-id').value;
+        if (!isNumericValue(id)) {
+            setMessage('prestamos-msg', 'Ingresa un ID de usuario', 'error');
+            return;
+        }
+        const endpoint = tipo === 'historial' ? 'historial' : 'activos';
+        try {
+            const res = await fetch(`${api.prestamos}/usuario/${id}/${endpoint}`);
+            if (!res.ok) {
+                throw new Error(await res.text());
+            }
+            const data = await res.json();
+            renderPrestamos(data);
+            setMessage('prestamos-msg', `${data.length} registro(s) encontrados`, 'success');
+        } catch (error) {
+            renderPrestamos([]);
+            setMessage('prestamos-msg', error.message, 'error');
+        }
+    }
+
+    async function verLibrosDisponiblesDesdePrestamos() {
+        try {
+            const res = await fetch(`${api.prestamos}/libros-disponibles`);
+            if (!res.ok) {
+                throw new Error(await res.text());
+            }
+            const data = await res.json();
+            renderLibros(data);
+            updateSummary('librosDisponibles', data.length);
+            setMessage('libros-msg', `${data.length} libro(s) disponibles para prestamo`, 'success');
+            setMessage('prestamos-msg', 'Mostrando libros disponibles para prestamo', 'success');
+        } catch (error) {
+            setMessage('prestamos-msg', error.message, 'error');
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        initNavigation();
+        limpiarEdicionLibro();
         cargarLibros();
+        cargarUsuarios();
+        cargarPrestamosActivos();
+
+        document.getElementById('form-crear-libro').addEventListener('submit', registrarLibro);
+        document.getElementById('form-buscar-libro').addEventListener('submit', (event) => {
+            event.preventDefault();
+            const termino = new FormData(event.target).get('termino')?.trim();
+            cargarLibros(termino);
+        });
+        document.getElementById('btn-refrescar-libros').addEventListener('click', () => {
+            document.getElementById('form-buscar-libro').reset();
+            cargarLibros();
+        });
+        document.getElementById('form-actualizar-libro').addEventListener('submit', actualizarLibro);
+        document.getElementById('btn-cancelar-edicion').addEventListener('click', limpiarEdicionLibro);
+
+        document.getElementById('form-crear-usuario').addEventListener('submit', registrarUsuario);
+        document.getElementById('btn-consultar-usuario').addEventListener('click', consultarUsuario);
+        document.getElementById('btn-puede-prestar').addEventListener('click', validarPuedePrestar);
+
+        document.getElementById('form-crear-prestamo').addEventListener('submit', crearPrestamo);
+        document.getElementById('form-devolver').addEventListener('submit', devolverPrestamo);
+        document.getElementById('btn-ver-activos').addEventListener('click', cargarPrestamosActivos);
+        document.getElementById('btn-ver-activos-usuario').addEventListener('click', () => verPrestamosUsuario('activos'));
+        document.getElementById('btn-ver-historial-usuario').addEventListener('click', () => verPrestamosUsuario('historial'));
+        document.getElementById('btn-libros-disponibles').addEventListener('click', verLibrosDisponiblesDesdePrestamos);
     });
-    document.getElementById('form-actualizar-libro').addEventListener('submit', actualizarLibro);
-    document.getElementById('btn-cancelar-edicion').addEventListener('click', limpiarEdicionLibro);
-
-    document.getElementById('form-crear-usuario').addEventListener('submit', registrarUsuario);
-    document.getElementById('btn-consultar-usuario').addEventListener('click', consultarUsuario);
-    document.getElementById('btn-puede-prestar').addEventListener('click', validarPuedePrestar);
-
-    document.getElementById('form-crear-prestamo').addEventListener('submit', crearPrestamo);
-    document.getElementById('form-devolver').addEventListener('submit', devolverPrestamo);
-    document.getElementById('btn-ver-activos').addEventListener('click', cargarPrestamosActivos);
-    document.getElementById('btn-ver-activos-usuario').addEventListener('click', () => verPrestamosUsuario('activos'));
-    document.getElementById('btn-ver-historial-usuario').addEventListener('click', () => verPrestamosUsuario('historial'));
-    document.getElementById('btn-libros-disponibles').addEventListener('click', verLibrosDisponiblesDesdePrestamos);
-});
 </script>
 </body>
 </html>
