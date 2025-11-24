@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>BookHub - Panel de Gestion</title>
+    <style>
+        :root {
+            --primary: #1a73e8;
+            --primary-dark: #1558b0;
+            --success: #2e7d32;
+            --danger: #c62828;
+            --border: #d3d8e2;
+            --bg: #eef2f9;
+            --surface: #ffffff;
+            --surface-muted: #f5f7fb;
+            --text: #1f2937;
+            --shadow: 0 12px 32px -20px rgba(26, 115, 232, 0.6);
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+        }
+        header {
+            background: white;
+            color: #fff;
+            padding: 25px 20px;
+            border-radius: 10px;
+        }
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        header h1 {
+            font-size: 32px;
+            font-weight: 600;
+        }
+        header p {
+            margin-top: 4px;
+            opacity: 0.9;
+            font-size: 15px;
+        }
+        .link-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border-radius: 999px;
+            background: #fff;
+            color: var(--primary-dark);
+            font-weight: 600;
+            text-decoration: none;
+            box-shadow: 0 4px 12px -6px rgba(0, 0, 0, 0.3);
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .link-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 20px -12px rgba(0, 0, 0, 0.35);
+        }
+        .navigation {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(6px);
+            border-bottom: 1px solid rgba(209, 213, 219, 0.6);
+            box-shadow: 0 10px 25px -22px rgba(15, 23, 42, 0.6);
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding: 14px 24px;
+        }
+        .nav-btn {
+            border: none;
+            border-radius: 999px;
+            padding: 10px 20px;
+            font-size: 15px;
+            font-weight: 600;
+            background: transparent;
+            color: var(--text);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .nav-btn.active {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 10px 25px -20px rgba(26, 115, 232, 0.9);
+        }
+        .nav-btn:hover {
+            background: rgba(26, 115, 232, 0.12);
+        }
+        main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 32px 24px 64px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+        }
+        .summary-card {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 18px 20px;
+            border: 1px solid var(--border);
+            box-shadow: 0 20px 30px -25px rgba(15, 23, 42, 0.45);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .summary-card h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--primary-dark);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .summary-card p {
+            font-size: 32px;
+            font-weight: 700;
+            margin: 4px 0;
+            color: var(--text);
+        }
+        .summary-card span {
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .panel {
+            display: none;
+            background: var(--surface);
+            border-radius: 18px;
+            padding: 28px 28px 32px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            gap: 24px;
+        }
+        .panel.active {
+            display: flex;
+            flex-direction: column;
+        }
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+        }
+        .panel-header h2 {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--primary-dark);
+        }
+        .panel-header p {
+            font-size: 15px;
+            color: #4b5563;
+        }
+        .panel-grid {
+            display: grid;
+            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        }
+        .card {
+            background: var(--surface-muted);
+            border-radius: 16px;
+            border: 1px solid rgba(209, 213, 219, 0.6);
+            padding: 20px 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            box-shadow: 0 18px 38px -30px rgba(15, 23, 42, 0.55);
+        }
+        .card > header h3,
+        .card h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .card > header p,
+        .card p.description {
+            font-size: 14px;
+            color: #6b7280;
+            margin-top: -4px;
+        }
+        .form-grid {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        }
+        .form-grid.compact {
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        }
+        .form-inline {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            align-items: end;
+        }
+        label span {
+            display: block;
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 4px;
+            color: #374151;
+        }
+        input,
+        select {
+            width: 100%;
+            padding: 10px 12px;
+            font-size: 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #fff;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.18);
+        }
+        .form-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .form-actions.stacked {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        button {
+            border: none;
+            border-radius: 8px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 18px -16px rgba(15, 23, 42, 0.6);
+        }
+        button.primary {
+            background: var(--primary);
+            color: #fff;
+        }
+        button.primary:hover {
+            background: var(--primary-dark);
+        }
+        button.secondary {
+            background: rgba(26, 115, 232, 0.12);
+            color: var(--primary-dark);
+        }
+        button.secondary:hover {
+            background: rgba(26, 115, 232, 0.2);
+        }
+        button.success {
+            background: rgba(46, 125, 50, 0.15);
+            color: var(--success);
+        }
+        button.success:hover {
+            background: rgba(46, 125, 50, 0.25);
+        }
+        button.danger {
+            background: rgba(198, 40, 40, 0.15);
+            color: var(--danger);
+        }
+        button.danger:hover {
+            background: rgba(198, 40, 40, 0.25);
+        }
+        button.ghost {
+            background: transparent;
+            color: var(--primary-dark);
+            border: 1px dashed rgba(26, 115, 232, 0.4);
+        }
+        button.ghost:hover {
+            background: rgba(26, 115, 232, 0.1);
+        }
+        button.small-btn {
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 999px;
+        }
+        .pill-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .table-wrapper {
+            width: 100%;
+            overflow-x: auto;
+            border: 1px solid rgba(209, 213, 219, 0.6);
+        border-radius: 14px;
+        background: #fff;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 640px;
+    }
+    thead {
+        background: rgba(26, 115, 232, 0.08);
+    }
+    th,
+    td {
+        padding: 12px 16px;
+        text-align: left;
+        border-bottom: 1px solid rgba(209, 213, 219, 0.6);
+        font-size: 13px;
+    }
+    tr:hover td {
+        background: rgba(26, 115, 232, 0.05);
+    }
+    .message {
+        min-height: 22px;
+        padding: 8px 12px;
+        border-radius: 10px;
+        font-size: 13px;
+        background: rgba(26, 115, 232, 0.08);
+        color: var(--primary-dark);
+        border: 1px solid transparent;
+    }
+    .message.success {
+        background: rgba(46, 125, 50, 0.12);
+        color: var(--success);
+        border-color: rgba(46, 125, 50, 0.2);
+    }
+    .message.error {
+        background: rgba(198, 40, 40, 0.12);
+        color: var(--danger);
+        border-color: rgba(198, 40, 40, 0.2);
+    }
+    .message.subtle {
+        background: transparent;
+        border: none;
+        padding: 0;
+        color: #6b7280;
+    }
+    .tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+    }
+    .tag.available {
+        background: rgba(46, 125, 50, 0.12);
+        color: var(--success);
+    }
+    .tag.unavailable {
+        background: rgba(198, 40, 40, 0.12);
+        color: var(--danger);
+    }
+    @media (max-width: 720px) {
+        header {
+            padding: 24px 20px;
+        }
+        header h1 {
+            font-size: 26px;
+        }
+        .panel {
+            padding: 24px 18px;
+        }
+        .table-wrapper {
+            min-width: 100%;
+        }
+    }
+</style>
+</head>
+<body>
+<header>
+    <div class="header-content">
+        <div>
+            <h1>BookHub Dashboard</h1>
+            <p>Administra libros, usuarios y prestamos desde un mismo lugar.</p>
+        </div>
+        <a class="link-button" href="/swagger-ui/index.html" target="_blank" rel="noopener">Ver API</a>
+    </div>
+</header>
+<nav class="navigation">
+    <button type="button" class="nav-btn active" data-panel="panel-libros">Libros</button>
+    <button type="button" class="nav-btn" data-panel="panel-usuarios">Usuarios</button>
+    <button type="button" class="nav-btn" data-panel="panel-prestamos">Prestamos</button>
+</nav>
+<main>
+    <section class="summary-grid">
+        <article class="summary-card">
+            <h3>Libros totales</h3>
+            <p id="summary-total-libros">-</p>
+            <span>Registros en catalogo</span>
+        </article>
+        <article class="summary-card">
+            <h3>Libros disponibles</h3>
+            <p id="summary-libros-disponibles">-</p>
+            <span>Listos para prestamo</span>
+        </article>
+        <article class="summary-card">
+            <h3>Usuarios registrados</h3>
+            <p id="summary-total-usuarios">-</p>
+            <span>Integrantes con cuenta</span>
+        </article>
+        <article class="summary-card">
+            <h3>Prestamos activos</h3>
+            <p id="summary-prestamos-activos">-</p>
+            <span>Movimientos en curso</span>
+        </article>
+    </section>
+
+    <section id="panel-libros" class="panel active">
+        <div class="panel-header">
+            <div>
+                <h2>Libros</h2>
+                <p>Registra nuevos titulos y controla la disponibilidad del catalogo.</p>
+            </div>
+        </div>
+        <p class="message" id="libros-msg" role="status" hidden></p>
+        <div class="panel-grid">
+            <article class="card">
+                <header>
+                    <h3>Registrar libro</h3>
+                    <p>Completa los datos para agregar un nuevo libro.</p>
+                </header>
+                <form id="form-crear-libro" class="form-grid">
+                    <label>
+                        <span>ISBN</span>
+                        <input type="text" name="isbn" placeholder="Ingresa el ISBN" required>
+                    </label>
+                    <label>
+                        <span>Titulo</span>
+                        <input type="text" name="titulo" placeholder="Titulo del libro" required>
+                    </label>
+                    <label>
+                        <span>Autor</span>
+                        <input type="text" name="autor" placeholder="Autor principal" required>
+                    </label>
+                    <label>
+                        <span>Categoria</span>
+                        <input type="text" name="categoria" placeholder="Categoria o genero" required>
+                    </label>
+                    <div class="form-actions">
+                        <button type="submit" class="primary">Guardar libro</button>
+                    </div>
+                </form>
+            </article>
+            <article class="card">
+                <header>
+                    <h3>Buscar en el catalogo</h3>
+                    <p>Filtra por titulo o autor para ubicar un libro especifico.</p>
+                </header>
+                <form id="form-buscar-libro" class="form-inline">
+                    <label>
+                        <span>Termino de busqueda</span>
+                        <input id="buscar-libro" name="termino" type="text" placeholder="Ej: Gabriel Garcia">
+                    </label>
+                    <div class="form-actions">
+                        <button type="submit" class="secondary">Buscar</button>
+                        <button type="button" id="btn-refrescar-libros" class="ghost">Ver todos</button>
+                    </div>
+                </form>
+            </article>
+            <article class="card">
+                <header>
+                    <h3>Editar libro seleccionado</h3>
+                    <p>Selecciona un libro de la tabla para precargar los campos.</p>
+                </header>
+                <form id="form-actualizar-libro" class="form-grid compact">
+                    <input type="hidden" name="isbn">
+                    <label>
+                        <span>Titulo</span>
+                        <input id="editar-titulo" name="titulo" type="text" placeholder="Titulo">
+                    </label>
+                    <label>
+                        <span>Autor</span>
+                        <input id="editar-autor" name="autor" type="text" placeholder="Autor">
+                    </label>
+                    <label>
+                        <span>Categoria</span>
+                        <input id="editar-categoria" name="categoria" type="text" placeholder="Categoria">
+                    </label>
+                    <label>
+                        <span>Disponible</span>
+                        <select id="editar-disponible" name="disponible">
+                            <option value="true">Si</option>
+                            <option value="false">No</option>
+                        </select>
+                    </label>
+                    <div class="form-actions">
+                        <button type="submit" class="primary">Actualizar libro</button>
+                        <button type="button" id="btn-cancelar-edicion" class="ghost">Limpiar seleccion</button>
+                    </div>
+                </form>
+                <p class="message subtle" id="editar-libro-msg" hidden></p>
+            </article>
+        </div>
+        <article class="card">
+            <header>
+                <h3>Listado de libros</h3>
+                <p class="description">Utiliza los botones de accion para editar o cambiar la disponibilidad.</p>
+            </header>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>ISBN</th>
+                        <th>Titulo</th>
+                        <th>Autor</th>
+                        <th>Categoria</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                    </thead>
+                    <tbody id="tabla-libros">
+                    <tr><td colspan="6">Sin registros</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
+    <section id="panel-usuarios" class="panel">
+        <div class="panel-header">
+            <div>
+                <h2>Usuarios</h2>
+                <p>Registra integrantes y consulta su actividad de prestamos.</p>
+            </div>
+        </div>
+        <p class="message" id="usuarios-msg" role="status" hidden></p>
+        <div class="panel-grid">
+            <article class="card">
+                <header>
+                    <h3>Registrar usuario</h3>
+                    <p>Captura los datos de contacto del nuevo usuario.</p>
+                </header>
+                <form id="form-crear-usuario" class="form-grid">
+                    <label>
+                        <span>Nombre completo</span>
+                        <input type="text" name="nombre" placeholder="Nombre y apellidos" required>
+                    </label>
+                    <label>
+                        <span>Email</span>
+                        <input type="email" name="email" placeholder="correo@dominio.com" required>
+                    </label>
+                    <label>
+                        <span>Telefono</span>
+                        <input type="text" name="telefono" placeholder="Numero de contacto">
+                    </label>
+                    <div class="form-actions">
+                        <button type="submit" class="primary">Guardar usuario</button>
+                    </div>
+                </form>
+            </article>
+            <article class="card">
+                <header>
+                    <h3>Consultas rapidas</h3>
+                    <p>Verifica los datos del usuario y su capacidad de prestamo.</p>
+                </header>
+                <div class="form-inline">
+                    <label>
+                        <span>ID de usuario</span>
+                        <input id="consultar-usuario-id" type="number" min="1" placeholder="Ej: 12">
+                    </label>
+                    <div class="form-actions">
+                        <button type="button" class="secondary" id="btn-consultar-usuario">Consultar usuario</button>
+                        <button type="button" class="ghost" id="btn-puede-prestar">Validar prestamos</button>
+                    </div>
+                </div>
+                <p class="message subtle" id="usuario-detalle" hidden></p>
+            </article>
+        </div>
+        <article class="card">
+            <header>
+                <h3>Usuarios registrados</h3>
+                <p class="description">Visualiza el total de prestamos activos por usuario.</p>
+            </header>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nombre</th>
+                        <th>Email</th>
+                        <th>Telefono</th>
+                        <th>Prestamos activos</th>
+                    </tr>
+                    </thead>
+                    <tbody id="tabla-usuarios">
+                    <tr><td colspan="5">Sin registros</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
+
+    <section id="panel-prestamos" class="panel">
+        <div class="panel-header">
+            <div>
+                <h2>Prestamos</h2>
+                <p>Gestiona las entregas y devoluciones de los libros en circulacion.</p>
+            </div>
+        </div>
+        <p class="message" id="prestamos-msg" role="status" hidden></p>
+        <div class="panel-grid">
+            <article class="card">
+                <header>
+                    <h3>Registrar prestamo</h3>
+                    <p>Indica el usuario y el ISBN del libro para iniciar el prestamo.</p>
+                </header>
+                <form id="form-crear-prestamo" class="form-grid">
+                    <label>
+                        <span>ID de usuario</span>
+                        <input type="number" name="usuarioId" min="1" placeholder="Ej: 12" required>
+                    </label>
+                    <label>
+                        <span>ISBN</span>
+                        <input type="text" name="libroIsbn" placeholder="ISBN del libro" required>
+                    </label>
+                    <div class="form-actions">
+                        <button type="submit" class="primary">Registrar prestamo</button>
+                    </div>
+                </form>
+            </article>
+            <article class="card">
+                <header>
+                    <h3>Registrar devolucion</h3>
+                    <p>Marca el prestamo como devuelto para liberar el libro.</p>
+                </header>
+                <form id="form-devolver" class="form-grid">
+                    <label>
+                        <span>ID de usuario</span>
+                        <input type="number" name="usuarioId" min="1" placeholder="Ej: 12" required>
+                    </label>
+                    <label>
+                        <span>ISBN</span>
+                        <input type="text" name="libroIsbn" placeholder="ISBN del libro" required>
+                    </label>
+                    <div class="form-actions">
+                        <button type="submit" class="secondary">Registrar devolucion</button>
+                    </div>
+                </form>
+            </article>
+            <article class="card">
+                <header>
+                    <h3>Consultas</h3>
+                    <p>Filtra los prestamos por usuario o visualiza los activos.</p>
+                </header>
+                <div class="form-inline">
+                    <label>
+                        <span>ID de usuario</span>
+                        <input id="prestamos-usuario-id" type="number" min="1" placeholder="Ej: 12">
+                    </label>
+                    <div class="form-actions">
+                        <button type="button" class="secondary" id="btn-ver-activos-usuario">Ver activos</button>
+                        <button type="button" class="ghost" id="btn-ver-historial-usuario">Ver historial</button>
+                    </div>
+                </div>
+                <div class="form-actions stacked">
+                    <button type="button" class="secondary" id="btn-ver-activos">Prestamos activos</button>
+                    <button type="button" class="ghost" id="btn-libros-disponibles">Ver libros disponibles</button>
+                </div>
+            </article>
+        </div>
+        <article class="card">
+            <header>
+                <h3>Listado de prestamos</h3>
+                <p class="description">Los prestamos activos se resaltan automaticamente.</p>
+            </header>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Usuario</th>
+                        <th>Libro</th>
+                        <th>Fecha prestamo</th>
+                        <th>Fecha devolucion</th>
+                        <th>Estado</th>
+                    </tr>
+                    </thead>
+                    <tbody id="tabla-prestamos">
+                    <tr><td colspan="6">Sin registros</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
+</main>
+<script>
+const api = {
+    libros: '/api/libros',
+    usuarios: '/api/usuarios',
+    prestamos: '/api/prestamos'
+};
+
+const messageTimers = {};
+
+const summaryElements = {
+    totalLibros: document.getElementById('summary-total-libros'),
+    librosDisponibles: document.getElementById('summary-libros-disponibles'),
+    totalUsuarios: document.getElementById('summary-total-usuarios'),
+    prestamosActivos: document.getElementById('summary-prestamos-activos')
+};
+
+function updateSummary(key, value) {
+    const element = summaryElements[key];
+    if (!element) {
+        return;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        element.textContent = value;
+        return;
+    }
+    element.textContent = value || '-';
+}
+
+function initNavigation() {
+    const buttons = document.querySelectorAll('.nav-btn');
+    const panels = document.querySelectorAll('.panel');
+    buttons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const target = button.dataset.panel;
+            buttons.forEach((btn) => btn.classList.toggle('active', btn === button));
+            panels.forEach((panel) => panel.classList.toggle('active', panel.id === target));
+            const destination = document.getElementById(target);
+            if (destination) {
+                destination.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+    });
+}
+
+function setMessage(id, text, type = '') {
+    const el = document.getElementById(id);
+    if (!el) {
+        return;
+    }
+    const normalized = normalizeMessage(text);
+    el.textContent = normalized;
+    el.className = type ? `message ${type}` : 'message';
+
+    if (messageTimers[id]) {
+        clearTimeout(messageTimers[id]);
+        delete messageTimers[id];
+    }
+
+    const shouldShow = Boolean(normalized);
+    el.hidden = !shouldShow;
+    if (shouldShow && type !== 'subtle') {
+        const timeout = type === 'error' ? 7000 : 5000;
+        messageTimers[id] = setTimeout(() => {
+            el.textContent = '';
+            el.className = 'message';
+            el.hidden = true;
+            delete messageTimers[id];
+        }, timeout);
+    }
+}
+
+function normalizeMessage(raw) {
+    if (raw === undefined || raw === null) {
+        return '';
+    }
+    if (typeof raw === 'string') {
+        return raw;
+    }
+    if (typeof raw === 'object') {
+        if (Array.isArray(raw)) {
+            return raw.map((item) => normalizeMessage(item)).join(', ');
+        }
+        if (raw.message) {
+            return normalizeMessage(raw.message);
+        }
+        if (raw.error) {
+            return normalizeMessage(raw.error);
+        }
+        if (raw.errors) {
+            return normalizeMessage(raw.errors);
+        }
+        return JSON.stringify(raw);
+    }
+    return String(raw);
+}
+
+async function parseResponse(res) {
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+        const json = await res.json();
+        return normalizeMessage(json);
+    }
+    const text = await res.text();
+    return text || res.statusText || 'Ocurrio un error inesperado';
+}
+
+async function cargarLibros(q = '') {
+    const url = q ? `${api.libros}/buscar?q=${encodeURIComponent(q)}` : api.libros;
+    try {
+        const res = await fetch(url);
+        if (!res.ok) {
+            throw new Error(await res.text() || 'No se pudo obtener la lista de libros');
+        }
+        const data = await res.json();
+        renderLibros(data);
+        updateSummary('totalLibros', data.length);
+        const disponibles = data.filter((libro) => libro.disponible).length;
+        updateSummary('librosDisponibles', disponibles);
+        setMessage('libros-msg', `${data.length} libro(s) cargado(s)`, 'success');
+    } catch (error) {
+        renderLibros([]);
+        updateSummary('totalLibros', 0);
+        updateSummary('librosDisponibles', 0);
+        setMessage('libros-msg', error.message, 'error');
+    }
+}
+
+function renderLibros(libros) {
+    const body = document.getElementById('tabla-libros');
+    if (!body) {
+        return;
+    }
+    body.innerHTML = '';
+    if (!Array.isArray(libros) || libros.length === 0) {
+        body.innerHTML = '<tr><td colspan="6">Sin registros</td></tr>';
+        return;
+    }
+    libros.forEach((libro) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${libro.isbn}</td>
+            <td>${libro.titulo}</td>
+            <td>${libro.autor}</td>
+            <td>${libro.categoria ?? '-'}</td>
+            <td><span class="tag ${libro.disponible ? 'available' : 'unavailable'}">${libro.disponible ? 'Disponible' : 'Prestado'}</span></td>
+            <td>
+                <div class="pill-buttons">
+                    <button class="secondary small-btn" data-action="editar">Editar</button>
+                    <button class="ghost small-btn danger" data-action="eliminar">Eliminar</button>
+                    <button class="small-btn ${libro.disponible ? 'danger' : 'success'}" data-action="toggle">
+                        ${libro.disponible ? 'Marcar prestado' : 'Marcar disponible'}
+                    </button>
+                </div>
+            </td>
+        `;
+        tr.querySelector('[data-action="editar"]').addEventListener('click', () => cargarLibroEdicion(libro));
+        tr.querySelector('[data-action="toggle"]').addEventListener('click', () => cambiarEstadoLibro(libro));
+        tr.querySelector('[data-action="eliminar"]').addEventListener('click', () => eliminarLibro(libro));
+        body.appendChild(tr);
+    });
+}
+
+function cargarLibroEdicion(libro) {
+    const form = document.getElementById('form-actualizar-libro');
+    if (!form) {
+        return;
+    }
+    form.isbn.value = libro.isbn;
+    form.titulo.value = libro.titulo ?? '';
+    form.autor.value = libro.autor ?? '';
+    form.categoria.value = libro.categoria ?? '';
+    form.disponible.value = libro.disponible ? 'true' : 'false';
+    setMessage('editar-libro-msg', `Libro ${libro.isbn} listo para editar`, 'success');
+}
+
+function limpiarEdicionLibro() {
+    const form = document.getElementById('form-actualizar-libro');
+    if (!form) {
+        return;
+    }
+    form.reset();
+    form.isbn.value = '';
+    setMessage('editar-libro-msg', 'Selecciona un libro en la tabla para editarlo', 'subtle');
+}
+
+async function registrarLibro(event) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+    try {
+        const res = await fetch(api.libros, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(Object.fromEntries(formData))
+        });
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
+        }
+        event.target.reset();
+        limpiarEdicionLibro();
+        setMessage('libros-msg', 'Libro registrado correctamente', 'success');
+        await cargarLibros();
+    } catch (error) {
+        setMessage('libros-msg', error.message || 'No se pudo registrar el libro', 'error');
+    }
+}
+
+async function actualizarLibro(event) {
+    event.preventDefault();
+    const form = event.target;
+    if (!form.isbn.value) {
+        setMessage('editar-libro-msg', 'Selecciona primero un libro de la tabla', 'error');
+        return;
+    }
+    const payload = {
+        titulo: form.titulo.value,
+        autor: form.autor.value,
+        categoria: form.categoria.value,
+        disponible: form.disponible.value === 'true'
+    };
+    try {
+        const res = await fetch(`${api.libros}/${encodeURIComponent(form.isbn.value)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
+        }
+        setMessage('editar-libro-msg', 'Libro actualizado correctamente', 'success');
+        await cargarLibros();
+    } catch (error) {
+        setMessage('editar-libro-msg', error.message || 'No se pudo actualizar el libro', 'error');
+    }
+}
+
+async function cambiarEstadoLibro(libro) {
+    const disponible = !libro.disponible;
+    try {
+        const res = await fetch(`${api.libros}/${encodeURIComponent(libro.isbn)}/estado`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ disponible })
+        });
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
+        }
+        setMessage('libros-msg', `El estado del libro ${libro.isbn} se actualizo correctamente`, 'success');
+        await cargarLibros();
+    } catch (error) {
+        setMessage('libros-msg', error.message || 'No se pudo actualizar el estado del libro', 'error');
+    }
+}
+
+async function eliminarLibro(libro) {
+    const label = libro.titulo ? `${libro.titulo} (${libro.isbn})` : libro.isbn;
+    const confirmed = window.confirm(`Eliminar el libro ${label}? Esta accion no se puede deshacer.`);
+    if (!confirmed) {
+        return;
+    }
+    try {
+        const res = await fetch(`${api.libros}/${encodeURIComponent(libro.isbn)}`, {
+            method: 'DELETE'
+        });
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
+        }
+        setMessage('libros-msg', `Libro ${libro.isbn} eliminado correctamente`, 'success');
+        await cargarLibros();
+        limpiarEdicionLibro();
+    } catch (error) {
+        setMessage('libros-msg', error.message || 'No se pudo eliminar el libro', 'error');
+    }
+}
+
+function isNumericValue(value) {
+    return value !== null && value !== undefined && value !== '' && !Number.isNaN(Number(value));
+}
+
+async function cargarUsuarios() {
+    try {
+        const res = await fetch(api.usuarios);
+        if (!res.ok) {
+            throw new Error(await res.text() || 'No se pudo obtener la lista de usuarios');
+        }
+        const data = await res.json();
+        await renderUsuarios(data);
+        updateSummary('totalUsuarios', data.length);
+        setMessage('usuarios-msg', `${data.length} usuario(s) cargado(s)`, 'success');
+    } catch (error) {
+        await renderUsuarios([]);
+        updateSummary('totalUsuarios', 0);
+        setMessage('usuarios-msg', error.message, 'error');
+    }
+}
+
+async function renderUsuarios(usuarios) {
+    const body = document.getElementById('tabla-usuarios');
+    if (!body) {
+        return;
+    }
+    body.innerHTML = '';
+    if (!Array.isArray(usuarios) || usuarios.length === 0) {
+        body.innerHTML = '<tr><td colspan="5">Sin registros</td></tr>';
+        return;
+    }
+    const filas = await Promise.all(
+        usuarios.map(async (usuario) => {
+            const activos = await obtenerPrestamosActivosUsuario(usuario.id, true);
+            return `
+                <tr>
+                    <td>${usuario.id}</td>
+                    <td>${usuario.nombre}</td>
+                    <td>${usuario.email}</td>
+                    <td>${usuario.telefono ?? '-'}</td>
+                    <td>${activos}</td>
+                </tr>
+            `;
+        })
+    );
+    body.innerHTML = filas.join('');
+}
+
+async function obtenerPrestamosActivosUsuario(id, soloCantidad = false) {
+    if (!isNumericValue(id)) {
+        return soloCantidad ? 0 : [];
+    }
+    try {
+        const res = await fetch(`${api.usuarios}/${id}/prestamos/activos`);
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        const data = await res.json();
+        return soloCantidad ? data.length : data;
+    } catch (error) {
+        if (!soloCantidad) {
+            setMessage('usuarios-msg', error.message, 'error');
+        }
+        return soloCantidad ? 0 : [];
+    }
+}
+
+async function registrarUsuario(event) {
+    event.preventDefault();
+    const payload = Object.fromEntries(new FormData(event.target));
+    try {
+        const res = await fetch(api.usuarios, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
+        }
+        event.target.reset();
+        setMessage('usuarios-msg', 'Usuario registrado correctamente', 'success');
+        await cargarUsuarios();
+    } catch (error) {
+        setMessage('usuarios-msg', error.message || 'No se pudo registrar el usuario', 'error');
+    }
+}
+
+async function consultarUsuario() {
+    const id = document.getElementById('consultar-usuario-id').value;
+    if (!isNumericValue(id)) {
+        setMessage('usuario-detalle', 'Ingresa un ID valido', 'error');
+        return;
+    }
+    try {
+        const res = await fetch(`${api.usuarios}/${id}`);
+        if (!res.ok) {
+            throw new Error(await res.text() || 'Usuario no encontrado');
+        }
+        const data = await res.json();
+        setMessage('usuario-detalle', `Usuario: ${data.nombre} | Email: ${data.email} | Tel: ${data.telefono ?? '-'}`, 'success');
+    } catch (error) {
+        setMessage('usuario-detalle', error.message, 'error');
+    }
+}
+
+async function validarPuedePrestar() {
+    const id = document.getElementById('consultar-usuario-id').value;
+    if (!isNumericValue(id)) {
+        setMessage('usuario-detalle', 'Ingresa un ID valido', 'error');
+        return;
+    }
+    try {
+        const res = await fetch(`${api.usuarios}/${id}/puede-prestar`);
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        const data = await res.json();
+        setMessage('usuario-detalle', data.puedePrestar ? 'Puede realizar un nuevo prestamo.' : 'No puede prestar (RN001).', data.puedePrestar ? 'success' : 'error');
+    } catch (error) {
+        setMessage('usuario-detalle', error.message, 'error');
+    }
+}
+
+async function cargarPrestamosActivos() {
+    try {
+        const res = await fetch(`${api.prestamos}/activos`);
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        const data = await res.json();
+        renderPrestamos(data);
+        updateSummary('prestamosActivos', data.length);
+        setMessage('prestamos-msg', `${data.length} prestamo(s) activo(s)`, 'success');
+    } catch (error) {
+        renderPrestamos([]);
+        updateSummary('prestamosActivos', 0);
+        setMessage('prestamos-msg', error.message, 'error');
+    }
+}
+
+function renderPrestamos(prestamos) {
+    const body = document.getElementById('tabla-prestamos');
+    if (!body) {
+        return;
+    }
+    body.innerHTML = '';
+    if (!Array.isArray(prestamos) || prestamos.length === 0) {
+        body.innerHTML = '<tr><td colspan="6">Sin registros</td></tr>';
+        return;
+    }
+    prestamos.forEach((prestamo) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${prestamo.id ?? '-'}</td>
+            <td>${prestamo.usuarioId}</td>
+            <td>${prestamo.libroIsbn}</td>
+            <td>${prestamo.fechaPrestamo ?? '-'}</td>
+            <td>${prestamo.fechaDevolucion ?? '-'}</td>
+            <td>${prestamo.estado ? '<span class="tag available">Activo</span>' : '<span class="tag unavailable">Devuelto</span>'}</td>
+        `;
+        body.appendChild(tr);
+    });
+}
+
+async function crearPrestamo(event) {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.target));
+    data.usuarioId = Number(data.usuarioId);
+    try {
+        const res = await fetch(api.prestamos, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
+        }
+        event.target.reset();
+        setMessage('prestamos-msg', 'Prestamo registrado correctamente', 'success');
+        await cargarPrestamosActivos();
+        await cargarLibros();
+        await cargarUsuarios();
+    } catch (error) {
+        setMessage('prestamos-msg', error.message, 'error');
+    }
+}
+
+async function devolverPrestamo(event) {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.target));
+    data.usuarioId = Number(data.usuarioId);
+    try {
+        const res = await fetch(`${api.prestamos}/devolver`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
+        }
+        event.target.reset();
+        setMessage('prestamos-msg', 'Devolucion registrada correctamente', 'success');
+        await cargarPrestamosActivos();
+        await cargarLibros();
+        await cargarUsuarios();
+    } catch (error) {
+        setMessage('prestamos-msg', error.message, 'error');
+    }
+}
+
+async function verPrestamosUsuario(tipo) {
+    const id = document.getElementById('prestamos-usuario-id').value;
+    if (!isNumericValue(id)) {
+        setMessage('prestamos-msg', 'Ingresa un ID de usuario', 'error');
+        return;
+    }
+    const endpoint = tipo === 'historial' ? 'historial' : 'activos';
+    try {
+        const res = await fetch(`${api.prestamos}/usuario/${id}/${endpoint}`);
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        const data = await res.json();
+        renderPrestamos(data);
+        setMessage('prestamos-msg', `${data.length} registro(s) encontrados`, 'success');
+    } catch (error) {
+        renderPrestamos([]);
+        setMessage('prestamos-msg', error.message, 'error');
+    }
+}
+
+async function verLibrosDisponiblesDesdePrestamos() {
+    try {
+        const res = await fetch(`${api.prestamos}/libros-disponibles`);
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        const data = await res.json();
+        renderLibros(data);
+        updateSummary('librosDisponibles', data.length);
+        setMessage('libros-msg', `${data.length} libro(s) disponibles para prestamo`, 'success');
+        setMessage('prestamos-msg', 'Mostrando libros disponibles para prestamo', 'success');
+    } catch (error) {
+        setMessage('prestamos-msg', error.message, 'error');
+    }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    initNavigation();
+    limpiarEdicionLibro();
+    cargarLibros();
+    cargarUsuarios();
+    cargarPrestamosActivos();
+
+    document.getElementById('form-crear-libro').addEventListener('submit', registrarLibro);
+    document.getElementById('form-buscar-libro').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const termino = new FormData(event.target).get('termino')?.trim();
+        cargarLibros(termino);
+    });
+    document.getElementById('btn-refrescar-libros').addEventListener('click', () => {
+        document.getElementById('form-buscar-libro').reset();
+        cargarLibros();
+    });
+    document.getElementById('form-actualizar-libro').addEventListener('submit', actualizarLibro);
+    document.getElementById('btn-cancelar-edicion').addEventListener('click', limpiarEdicionLibro);
+
+    document.getElementById('form-crear-usuario').addEventListener('submit', registrarUsuario);
+    document.getElementById('btn-consultar-usuario').addEventListener('click', consultarUsuario);
+    document.getElementById('btn-puede-prestar').addEventListener('click', validarPuedePrestar);
+
+    document.getElementById('form-crear-prestamo').addEventListener('submit', crearPrestamo);
+    document.getElementById('form-devolver').addEventListener('submit', devolverPrestamo);
+    document.getElementById('btn-ver-activos').addEventListener('click', cargarPrestamosActivos);
+    document.getElementById('btn-ver-activos-usuario').addEventListener('click', () => verPrestamosUsuario('activos'));
+    document.getElementById('btn-ver-historial-usuario').addEventListener('click', () => verPrestamosUsuario('historial'));
+    document.getElementById('btn-libros-disponibles').addEventListener('click', verLibrosDisponiblesDesdePrestamos);
+});
+</script>
+</body>
+</html>
