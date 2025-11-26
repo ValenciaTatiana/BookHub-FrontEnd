@@ -403,6 +403,7 @@
     <button type="button" class="nav-btn active" data-panel="panel-libros">Libros</button>
     <button type="button" class="nav-btn" data-panel="panel-usuarios">Usuarios</button>
     <button type="button" class="nav-btn" data-panel="panel-prestamos">Prestamos</button>
+    <button type="button" class="nav-btn" data-panel="panel-reportes">Reportes</button>
 </nav>
 <main>
     <section class="summary-grid">
@@ -704,562 +705,826 @@
             </div>
         </article>
     </section>
+
+    <section id="panel-reportes" class="panel">
+        <div class="panel-header">
+            <div>
+                <h2>Reportes</h2>
+                <p>Genera y consulta reportes del sistema, exporta CSV y crea resúmenes automáticos.</p>
+            </div>
+        </div>
+        <p class="message" id="reportes-msg" role="status" hidden></p>
+        <div class="panel-grid">
+            <article class="card">
+                <header>
+                    <h3>Crear reporte manual</h3>
+                    <p>Define un título y descripción para registrar un reporte puntual.</p>
+                </header>
+                <form id="form-crear-reporte" class="form-grid">
+                    <label>
+                        <span>Título</span>
+                        <input type="text" name="titulo" placeholder="Ej: Incidencias de inventario" required>
+                    </label>
+                    <label>
+                        <span>Descripción</span>
+                        <textarea name="descripcion" placeholder="Detalle del reporte" required style="min-height:120px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; resize: vertical;"></textarea>
+                    </label>
+                    <div class="form-actions">
+                        <button type="submit" class="primary">Guardar reporte</button>
+                    </div>
+                </form>
+            </article>
+            <article class="card">
+                <header>
+                    <h3>Generar resumen automático</h3>
+                    <p>Crea un reporte con métricas de préstamos y top libros prestados.</p>
+                </header>
+                <div class="form-inline">
+                    <label>
+                        <span>Top libros</span>
+                        <input type="number" id="top-libros" min="1" max="20" value="5">
+                    </label>
+                    <div class="form-actions">
+                        <button type="button" class="secondary" id="btn-generar-resumen">Generar resumen</button>
+                    </div>
+                </div>
+                <p class="message subtle" id="resumen-msg" hidden></p>
+            </article>
+            <article class="card">
+                <header>
+                    <h3>Filtrar y exportar</h3>
+                    <p>Busca por título o rango de fechas y descarga CSV.</p>
+                </header>
+                <form id="form-filtro-reportes" class="form-inline">
+                    <label>
+                        <span>Título contiene</span>
+                        <input type="text" name="titulo" placeholder="Ej: prestamo">
+                    </label>
+                    <label>
+                        <span>Desde</span>
+                        <input type="datetime-local" name="desde">
+                    </label>
+                    <label>
+                        <span>Hasta</span>
+                        <input type="datetime-local" name="hasta">
+                    </label>
+                    <label>
+                        <span>Resultados</span>
+                        <select name="size">
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </label>
+                    <div class="form-actions">
+                        <button type="submit" class="secondary">Aplicar filtros</button>
+                        <button type="button" class="ghost" id="btn-exportar-csv">Exportar CSV</button>
+                        <button type="button" class="ghost" id="btn-reset-reportes">Limpiar</button>
+                    </div>
+                </form>
+            </article>
+        </div>
+        <article class="card">
+            <header>
+                <h3>Listado de reportes</h3>
+                <p class="description">Revisa los reportes generados y elimínalos si ya no se necesitan.</p>
+            </header>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Título</th>
+                        <th>Descripción</th>
+                        <th>Fecha</th>
+                        <th>Acciones</th>
+                    </tr>
+                    </thead>
+                    <tbody id="tabla-reportes">
+                    <tr><td colspan="5">Sin registros</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
 </main>
 <script>
-    const base = "http://localhost:8080/api";
+const api = {
+    libros: '/api/libros',
+    usuarios: '/api/usuarios',
+    prestamos: '/api/prestamos',
+    reportes: '/api/reportes'
+};
 
-    const api = {
-        libros: `${base}/libros`,
-        usuarios: `${base}/usuarios`,
-        prestamos: `${base}/prestamos`
-    };
+const messageTimers = {};
 
+const summaryElements = {
+    totalLibros: document.getElementById('summary-total-libros'),
+    librosDisponibles: document.getElementById('summary-libros-disponibles'),
+    totalUsuarios: document.getElementById('summary-total-usuarios'),
+    prestamosActivos: document.getElementById('summary-prestamos-activos')
+};
 
-    const messageTimers = {};
-
-    const summaryElements = {
-        totalLibros: document.getElementById('summary-total-libros'),
-        librosDisponibles: document.getElementById('summary-libros-disponibles'),
-        totalUsuarios: document.getElementById('summary-total-usuarios'),
-        prestamosActivos: document.getElementById('summary-prestamos-activos')
-    };
-
-    function updateSummary(key, value) {
-        const element = summaryElements[key];
-        if (!element) {
-            return;
-        }
-        if (typeof value === 'number' && Number.isFinite(value)) {
-            element.textContent = value;
-            return;
-        }
-        element.textContent = value || '-';
+function updateSummary(key, value) {
+    const element = summaryElements[key];
+    if (!element) {
+        return;
     }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        element.textContent = value;
+        return;
+    }
+    element.textContent = value || '-';
+}
 
-    function initNavigation() {
-        const buttons = document.querySelectorAll('.nav-btn');
-        const panels = document.querySelectorAll('.panel');
-        buttons.forEach((button) => {
-            button.addEventListener('click', () => {
-                const target = button.dataset.panel;
-                buttons.forEach((btn) => btn.classList.toggle('active', btn === button));
-                panels.forEach((panel) => panel.classList.toggle('active', panel.id === target));
-                const destination = document.getElementById(target);
-                if (destination) {
-                    destination.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            });
+function initNavigation() {
+    const buttons = document.querySelectorAll('.nav-btn');
+    const panels = document.querySelectorAll('.panel');
+    buttons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const target = button.dataset.panel;
+            buttons.forEach((btn) => btn.classList.toggle('active', btn === button));
+            panels.forEach((panel) => panel.classList.toggle('active', panel.id === target));
+            const destination = document.getElementById(target);
+            if (destination) {
+                destination.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
         });
+    });
+}
+
+function setMessage(id, text, type = '') {
+    const el = document.getElementById(id);
+    if (!el) {
+        return;
+    }
+    const normalized = normalizeMessage(text);
+    el.textContent = normalized;
+    el.className = type ? `message ${type}` : 'message';
+
+    if (messageTimers[id]) {
+        clearTimeout(messageTimers[id]);
+        delete messageTimers[id];
     }
 
-    function setMessage(id, text, type = '') {
-        const el = document.getElementById(id);
-        if (!el) {
-            return;
-        }
-        const normalized = normalizeMessage(text);
-        el.textContent = normalized;
-        el.className = type ? `message ${type}` : 'message';
-
-        if (messageTimers[id]) {
-            clearTimeout(messageTimers[id]);
+    const shouldShow = Boolean(normalized);
+    el.hidden = !shouldShow;
+    if (shouldShow && type !== 'subtle') {
+        const timeout = type === 'error' ? 7000 : 5000;
+        messageTimers[id] = setTimeout(() => {
+            el.textContent = '';
+            el.className = 'message';
+            el.hidden = true;
             delete messageTimers[id];
-        }
-
-        const shouldShow = Boolean(normalized);
-        el.hidden = !shouldShow;
-        if (shouldShow && type !== 'subtle') {
-            const timeout = type === 'error' ? 7000 : 5000;
-            messageTimers[id] = setTimeout(() => {
-                el.textContent = '';
-                el.className = 'message';
-                el.hidden = true;
-                delete messageTimers[id];
-            }, timeout);
-        }
+        }, timeout);
     }
+}
 
-    function normalizeMessage(raw) {
-        if (raw === undefined || raw === null) {
-            return '';
-        }
-        if (typeof raw === 'string') {
-            return raw;
-        }
-        if (typeof raw === 'object') {
-            if (Array.isArray(raw)) {
-                return raw.map((item) => normalizeMessage(item)).join(', ');
-            }
-            if (raw.message) {
-                return normalizeMessage(raw.message);
-            }
-            if (raw.error) {
-                return normalizeMessage(raw.error);
-            }
-            if (raw.errors) {
-                return normalizeMessage(raw.errors);
-            }
-            return JSON.stringify(raw);
-        }
-        return String(raw);
+function normalizeMessage(raw) {
+    if (raw === undefined || raw === null) {
+        return '';
     }
-
-    async function parseResponse(res) {
-        const contentType = res.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-            const json = await res.json();
-            return normalizeMessage(json);
-        }
-        const text = await res.text();
-        return text || res.statusText || 'Ocurrio un error inesperado';
+    if (typeof raw === 'string') {
+        return raw;
     }
-
-    async function cargarLibros(q = '') {
-        const url = q ? `${api.libros}/buscar?q=${encodeURIComponent(q)}` : api.libros;
-        try {
-            const res = await fetch(url);
-            if (!res.ok) {
-                throw new Error(await res.text() || 'No se pudo obtener la lista de libros');
-            }
-            const data = await res.json();
-            renderLibros(data);
-            updateSummary('totalLibros', data.length);
-            const disponibles = data.filter((libro) => libro.disponible).length;
-            updateSummary('librosDisponibles', disponibles);
-            setMessage('libros-msg', `${data.length} libro(s) cargado(s)`, 'success');
-        } catch (error) {
-            renderLibros([]);
-            updateSummary('totalLibros', 0);
-            updateSummary('librosDisponibles', 0);
-            setMessage('libros-msg', error.message, 'error');
+    if (typeof raw === 'object') {
+        if (Array.isArray(raw)) {
+            return raw.map((item) => normalizeMessage(item)).join(', ');
         }
+        if (raw.message) {
+            return normalizeMessage(raw.message);
+        }
+        if (raw.error) {
+            return normalizeMessage(raw.error);
+        }
+        if (raw.errors) {
+            return normalizeMessage(raw.errors);
+        }
+        return JSON.stringify(raw);
     }
+    return String(raw);
+}
 
-    function renderLibros(libros) {
-        const body = document.getElementById('tabla-libros');
-        if (!body) {
-            return;
+async function parseResponse(res) {
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+        const json = await res.json();
+        return normalizeMessage(json);
+    }
+    const text = await res.text();
+    return text || res.statusText || 'Ocurrio un error inesperado';
+}
+
+function buildQuery(params) {
+    const qp = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+        const isNumber = typeof value === 'number' && Number.isFinite(value);
+        if ((typeof value === 'string' && value.trim() !== '') || isNumber) {
+            qp.append(key, isNumber ? value : value.trim());
         }
-        body.innerHTML = '';
-        if (!Array.isArray(libros) || libros.length === 0) {
-            body.innerHTML = '<tr><td colspan="6">Sin registros</td></tr>';
-            return;
+    });
+    return qp.toString();
+}
+
+async function cargarReportes(filtros = {}) {
+    const query = buildQuery(filtros);
+    const url = query ? `${api.reportes}?${query}` : api.reportes;
+    try {
+        const res = await fetch(url);
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
         }
-        libros.forEach((libro) => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${libro.isbn}</td>
-                <td>${libro.titulo}</td>
-                <td>${libro.autor}</td>
-                <td>${libro.categoria ?? '-'}</td>
-                <td><span class="tag ${libro.disponible ? 'available' : 'unavailable'}">${libro.disponible ? 'Disponible' : 'Prestado'}</span></td>
-                <td>
-                    <div class="pill-buttons">
-                        <button class="secondary small-btn" data-action="editar">Editar</button>
-                        <button class="ghost small-btn danger" data-action="eliminar">Eliminar</button>
-                        <button class="small-btn ${libro.disponible ? 'danger' : 'success'}" data-action="toggle">
-                            ${libro.disponible ? 'Marcar prestado' : 'Marcar disponible'}
-                        </button>
-                    </div>
-                </td>
-            `;
-            tr.querySelector('[data-action="editar"]').addEventListener('click', () => cargarLibroEdicion(libro));
-            tr.querySelector('[data-action="toggle"]').addEventListener('click', () => cambiarEstadoLibro(libro));
-            tr.querySelector('[data-action="eliminar"]').addEventListener('click', () => eliminarLibro(libro));
-            body.appendChild(tr);
+        const data = await res.json();
+        renderReportes(data);
+        setMessage('reportes-msg', `${data.length} reporte(s) cargado(s)`, 'success');
+    } catch (error) {
+        renderReportes([]);
+        setMessage('reportes-msg', error.message || 'No se pudo obtener la lista de reportes', 'error');
+    }
+}
+
+function renderReportes(reportes) {
+    const body = document.getElementById('tabla-reportes');
+    if (!body) {
+        return;
+    }
+    body.innerHTML = '';
+    if (!Array.isArray(reportes) || reportes.length === 0) {
+        body.innerHTML = '<tr><td colspan="5">Sin registros</td></tr>';
+        return;
+    }
+    reportes.forEach((reporte) => {
+        const tr = document.createElement('tr');
+        const fecha = reporte.fechaGeneracion ? reporte.fechaGeneracion.replace('T', ' ').slice(0, 19) : '-';
+        tr.innerHTML = `
+            <td>${reporte.id ?? '-'}</td>
+            <td>${reporte.titulo ?? '-'}</td>
+            <td style="max-width: 320px;">${(reporte.descripcion ?? '-').replace(/\n/g, '<br>')}</td>
+            <td>${fecha}</td>
+            <td>
+                <div class="pill-buttons">
+                    <button class="ghost small-btn danger" data-action="eliminar">Eliminar</button>
+                </div>
+            </td>
+        `;
+        tr.querySelector('[data-action="eliminar"]').addEventListener('click', () => eliminarReporte(reporte));
+        body.appendChild(tr);
+    });
+}
+
+async function crearReporte(event) {
+    event.preventDefault();
+    const payload = Object.fromEntries(new FormData(event.target));
+    try {
+        const res = await fetch(api.reportes, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
         });
-    }
-
-    function cargarLibroEdicion(libro) {
-        const form = document.getElementById('form-actualizar-libro');
-        if (!form) {
-            return;
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
         }
-        form.isbn.value = libro.isbn;
-        form.titulo.value = libro.titulo ?? '';
-        form.autor.value = libro.autor ?? '';
-        form.categoria.value = libro.categoria ?? '';
-        form.disponible.value = libro.disponible ? 'true' : 'false';
-        setMessage('editar-libro-msg', `Libro ${libro.isbn} listo para editar`, 'success');
+        event.target.reset();
+        setMessage('reportes-msg', 'Reporte creado correctamente', 'success');
+        await cargarReportes();
+    } catch (error) {
+        setMessage('reportes-msg', error.message || 'No se pudo crear el reporte', 'error');
     }
+}
 
-    function limpiarEdicionLibro() {
-        const form = document.getElementById('form-actualizar-libro');
-        if (!form) {
-            return;
+async function generarResumen() {
+    const topLibros = Number(document.getElementById('top-libros')?.value || 5);
+    try {
+        const res = await fetch(`${api.reportes}/auto/resumen-prestamos?topLibros=${topLibros || 5}`, {
+            method: 'POST'
+        });
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
         }
-        form.reset();
-        form.isbn.value = '';
-        setMessage('editar-libro-msg', 'Selecciona un libro en la tabla para editarlo', 'subtle');
+        const data = await res.json();
+        setMessage('resumen-msg', `Resumen generado (id ${data.id}).`, 'success');
+        await cargarReportes();
+    } catch (error) {
+        setMessage('resumen-msg', error.message || 'No se pudo generar el resumen', 'error');
     }
+}
 
-    async function registrarLibro(event) {
-        event.preventDefault();
-        const formData = new FormData(event.target);
-        try {
-            const res = await fetch(api.libros, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(Object.fromEntries(formData))
-            });
-            if (!res.ok) {
-                throw new Error(await parseResponse(res));
-            }
-            event.target.reset();
-            limpiarEdicionLibro();
-            setMessage('libros-msg', 'Libro registrado correctamente', 'success');
-            await cargarLibros();
-        } catch (error) {
-            setMessage('libros-msg', error.message || 'No se pudo registrar el libro', 'error');
+async function exportarReportesCsv(filtros = {}) {
+    const query = buildQuery(filtros);
+    const url = query ? `${api.reportes}/export?${query}` : `${api.reportes}/export`;
+    try {
+        const res = await fetch(url, { headers: { Accept: 'text/csv' } });
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
         }
+        const texto = await res.text();
+        const blob = new Blob([texto], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'reportes.csv';
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        URL.revokeObjectURL(link.href);
+        document.body.removeChild(link);
+        setMessage('reportes-msg', 'CSV descargado', 'success');
+    } catch (error) {
+        setMessage('reportes-msg', error.message || 'No se pudo exportar', 'error');
     }
+}
 
-    async function actualizarLibro(event) {
-        event.preventDefault();
-        const form = event.target;
-        if (!form.isbn.value) {
-            setMessage('editar-libro-msg', 'Selecciona primero un libro de la tabla', 'error');
-            return;
-        }
-        const payload = {
-            titulo: form.titulo.value,
-            autor: form.autor.value,
-            categoria: form.categoria.value,
-            disponible: form.disponible.value === 'true'
-        };
-        try {
-            const res = await fetch(`${api.libros}/${encodeURIComponent(form.isbn.value)}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if (!res.ok) {
-                throw new Error(await parseResponse(res));
-            }
-            setMessage('editar-libro-msg', 'Libro actualizado correctamente', 'success');
-            await cargarLibros();
-        } catch (error) {
-            setMessage('editar-libro-msg', error.message || 'No se pudo actualizar el libro', 'error');
-        }
+async function eliminarReporte(reporte) {
+    const label = reporte.titulo ? `${reporte.titulo} (#${reporte.id})` : `Reporte #${reporte.id}`;
+    const confirmed = window.confirm(`Eliminar ${label}? Esta acción no se puede deshacer.`);
+    if (!confirmed) {
+        return;
     }
-
-    async function cambiarEstadoLibro(libro) {
-        const disponible = !libro.disponible;
-        try {
-            const res = await fetch(`${api.libros}/${encodeURIComponent(libro.isbn)}/estado`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ disponible })
-            });
-            if (!res.ok) {
-                throw new Error(await parseResponse(res));
-            }
-            setMessage('libros-msg', `El estado del libro ${libro.isbn} se actualizo correctamente`, 'success');
-            await cargarLibros();
-        } catch (error) {
-            setMessage('libros-msg', error.message || 'No se pudo actualizar el estado del libro', 'error');
+    try {
+        const res = await fetch(`${api.reportes}/${reporte.id}`, { method: 'DELETE' });
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
         }
+        setMessage('reportes-msg', 'Reporte eliminado correctamente', 'success');
+        await cargarReportes();
+    } catch (error) {
+        setMessage('reportes-msg', error.message || 'No se pudo eliminar el reporte', 'error');
     }
+}
 
-    async function eliminarLibro(libro) {
-        const label = libro.titulo ? `${libro.titulo} (${libro.isbn})` : libro.isbn;
-        const confirmed = window.confirm(`Eliminar el libro ${label}? Esta accion no se puede deshacer.`);
-        if (!confirmed) {
-            return;
+function obtenerFiltrosReportes() {
+    const form = document.getElementById('form-filtro-reportes');
+    if (!form) {
+        return {};
+    }
+    const data = new FormData(form);
+    return {
+        titulo: data.get('titulo') || '',
+        desde: data.get('desde') || '',
+        hasta: data.get('hasta') || '',
+        page: 0,
+        size: Number(data.get('size') || 20)
+    };
+}
+
+async function cargarLibros(q = '') {
+    const url = q ? `${api.libros}/buscar?q=${encodeURIComponent(q)}` : api.libros;
+    try {
+        const res = await fetch(url);
+        if (!res.ok) {
+            throw new Error(await res.text() || 'No se pudo obtener la lista de libros');
         }
-        try {
-            const res = await fetch(`${api.libros}/${encodeURIComponent(libro.isbn)}`, {
-                method: 'DELETE'
-            });
-            if (!res.ok) {
-                throw new Error(await parseResponse(res));
-            }
-            setMessage('libros-msg', `Libro ${libro.isbn} eliminado correctamente`, 'success');
-            await cargarLibros();
-            limpiarEdicionLibro();
-        } catch (error) {
-            setMessage('libros-msg', error.message || 'No se pudo eliminar el libro', 'error');
+        const data = await res.json();
+        renderLibros(data);
+        updateSummary('totalLibros', data.length);
+        const disponibles = data.filter((libro) => libro.disponible).length;
+        updateSummary('librosDisponibles', disponibles);
+        setMessage('libros-msg', `${data.length} libro(s) cargado(s)`, 'success');
+    } catch (error) {
+        renderLibros([]);
+        updateSummary('totalLibros', 0);
+        updateSummary('librosDisponibles', 0);
+        setMessage('libros-msg', error.message, 'error');
+    }
+}
+
+function renderLibros(libros) {
+    const body = document.getElementById('tabla-libros');
+    if (!body) {
+        return;
+    }
+    body.innerHTML = '';
+    if (!Array.isArray(libros) || libros.length === 0) {
+        body.innerHTML = '<tr><td colspan="6">Sin registros</td></tr>';
+        return;
+    }
+    libros.forEach((libro) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${libro.isbn}</td>
+            <td>${libro.titulo}</td>
+            <td>${libro.autor}</td>
+            <td>${libro.categoria ?? '-'}</td>
+            <td><span class="tag ${libro.disponible ? 'available' : 'unavailable'}">${libro.disponible ? 'Disponible' : 'Prestado'}</span></td>
+            <td>
+                <div class="pill-buttons">
+                    <button class="secondary small-btn" data-action="editar">Editar</button>
+                    <button class="ghost small-btn danger" data-action="eliminar">Eliminar</button>
+                    <button class="small-btn ${libro.disponible ? 'danger' : 'success'}" data-action="toggle">
+                        ${libro.disponible ? 'Marcar prestado' : 'Marcar disponible'}
+                    </button>
+                </div>
+            </td>
+        `;
+        tr.querySelector('[data-action="editar"]').addEventListener('click', () => cargarLibroEdicion(libro));
+        tr.querySelector('[data-action="toggle"]').addEventListener('click', () => cambiarEstadoLibro(libro));
+        tr.querySelector('[data-action="eliminar"]').addEventListener('click', () => eliminarLibro(libro));
+        body.appendChild(tr);
+    });
+}
+
+function cargarLibroEdicion(libro) {
+    const form = document.getElementById('form-actualizar-libro');
+    if (!form) {
+        return;
+    }
+    form.isbn.value = libro.isbn;
+    form.titulo.value = libro.titulo ?? '';
+    form.autor.value = libro.autor ?? '';
+    form.categoria.value = libro.categoria ?? '';
+    form.disponible.value = libro.disponible ? 'true' : 'false';
+    setMessage('editar-libro-msg', `Libro ${libro.isbn} listo para editar`, 'success');
+}
+
+function limpiarEdicionLibro() {
+    const form = document.getElementById('form-actualizar-libro');
+    if (!form) {
+        return;
+    }
+    form.reset();
+    form.isbn.value = '';
+    setMessage('editar-libro-msg', 'Selecciona un libro en la tabla para editarlo', 'subtle');
+}
+
+async function registrarLibro(event) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+    try {
+        const res = await fetch(api.libros, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(Object.fromEntries(formData))
+        });
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
         }
+        event.target.reset();
+        limpiarEdicionLibro();
+        setMessage('libros-msg', 'Libro registrado correctamente', 'success');
+        await cargarLibros();
+    } catch (error) {
+        setMessage('libros-msg', error.message || 'No se pudo registrar el libro', 'error');
     }
+}
 
-    function isNumericValue(value) {
-        return value !== null && value !== undefined && value !== '' && !Number.isNaN(Number(value));
+async function actualizarLibro(event) {
+    event.preventDefault();
+    const form = event.target;
+    if (!form.isbn.value) {
+        setMessage('editar-libro-msg', 'Selecciona primero un libro de la tabla', 'error');
+        return;
     }
+    const payload = {
+        titulo: form.titulo.value,
+        autor: form.autor.value,
+        categoria: form.categoria.value,
+        disponible: form.disponible.value === 'true'
+    };
+    try {
+        const res = await fetch(`${api.libros}/${encodeURIComponent(form.isbn.value)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
+        }
+        setMessage('editar-libro-msg', 'Libro actualizado correctamente', 'success');
+        await cargarLibros();
+    } catch (error) {
+        setMessage('editar-libro-msg', error.message || 'No se pudo actualizar el libro', 'error');
+    }
+}
 
-    async function cargarUsuarios() {
-        try {
-            const res = await fetch(api.usuarios);
-            if (!res.ok) {
-                throw new Error(await res.text() || 'No se pudo obtener la lista de usuarios');
-            }
-            const data = await res.json();
-            await renderUsuarios(data);
-            updateSummary('totalUsuarios', data.length);
-            setMessage('usuarios-msg', `${data.length} usuario(s) cargado(s)`, 'success');
-        } catch (error) {
-            await renderUsuarios([]);
-            updateSummary('totalUsuarios', 0);
+async function cambiarEstadoLibro(libro) {
+    const disponible = !libro.disponible;
+    try {
+        const res = await fetch(`${api.libros}/${encodeURIComponent(libro.isbn)}/estado`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ disponible })
+        });
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
+        }
+        setMessage('libros-msg', `El estado del libro ${libro.isbn} se actualizo correctamente`, 'success');
+        await cargarLibros();
+    } catch (error) {
+        setMessage('libros-msg', error.message || 'No se pudo actualizar el estado del libro', 'error');
+    }
+}
+
+async function eliminarLibro(libro) {
+    const label = libro.titulo ? `${libro.titulo} (${libro.isbn})` : libro.isbn;
+    const confirmed = window.confirm(`Eliminar el libro ${label}? Esta accion no se puede deshacer.`);
+    if (!confirmed) {
+        return;
+    }
+    try {
+        const res = await fetch(`${api.libros}/${encodeURIComponent(libro.isbn)}`, {
+            method: 'DELETE'
+        });
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
+        }
+        setMessage('libros-msg', `Libro ${libro.isbn} eliminado correctamente`, 'success');
+        await cargarLibros();
+        limpiarEdicionLibro();
+    } catch (error) {
+        setMessage('libros-msg', error.message || 'No se pudo eliminar el libro', 'error');
+    }
+}
+
+function isNumericValue(value) {
+    return value !== null && value !== undefined && value !== '' && !Number.isNaN(Number(value));
+}
+
+async function cargarUsuarios() {
+    try {
+        const res = await fetch(api.usuarios);
+        if (!res.ok) {
+            throw new Error(await res.text() || 'No se pudo obtener la lista de usuarios');
+        }
+        const data = await res.json();
+        await renderUsuarios(data);
+        updateSummary('totalUsuarios', data.length);
+        setMessage('usuarios-msg', `${data.length} usuario(s) cargado(s)`, 'success');
+    } catch (error) {
+        await renderUsuarios([]);
+        updateSummary('totalUsuarios', 0);
+        setMessage('usuarios-msg', error.message, 'error');
+    }
+}
+
+async function renderUsuarios(usuarios) {
+    const body = document.getElementById('tabla-usuarios');
+    if (!body) {
+        return;
+    }
+    body.innerHTML = '';
+    if (!Array.isArray(usuarios) || usuarios.length === 0) {
+        body.innerHTML = '<tr><td colspan="5">Sin registros</td></tr>';
+        return;
+    }
+    const filas = await Promise.all(
+        usuarios.map(async (usuario) => {
+            const activos = await obtenerPrestamosActivosUsuario(usuario.id, true);
+            return `
+                <tr>
+                    <td>${usuario.id}</td>
+                    <td>${usuario.nombre}</td>
+                    <td>${usuario.email}</td>
+                    <td>${usuario.telefono ?? '-'}</td>
+                    <td>${activos}</td>
+                </tr>
+            `;
+        })
+    );
+    body.innerHTML = filas.join('');
+}
+
+async function obtenerPrestamosActivosUsuario(id, soloCantidad = false) {
+    if (!isNumericValue(id)) {
+        return soloCantidad ? 0 : [];
+    }
+    try {
+        const res = await fetch(`${api.prestamos}/usuario/${id}/activos`);
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        const data = await res.json();
+        return soloCantidad ? data.length : data;
+    } catch (error) {
+        if (!soloCantidad) {
             setMessage('usuarios-msg', error.message, 'error');
         }
+        return soloCantidad ? 0 : [];
     }
+}
 
-    async function renderUsuarios(usuarios) {
-        const body = document.getElementById('tabla-usuarios');
-        if (!body) {
-            return;
-        }
-        body.innerHTML = '';
-        if (!Array.isArray(usuarios) || usuarios.length === 0) {
-            body.innerHTML = '<tr><td colspan="5">Sin registros</td></tr>';
-            return;
-        }
-        const filas = await Promise.all(
-            usuarios.map(async (usuario) => {
-                const activos = await obtenerPrestamosActivosUsuario(usuario.id, true);
-                return `
-                    <tr>
-                        <td>${usuario.id}</td>
-                        <td>${usuario.nombre}</td>
-                        <td>${usuario.email}</td>
-                        <td>${usuario.telefono ?? '-'}</td>
-                        <td>${activos}</td>
-                    </tr>
-                `;
-            })
-        );
-        body.innerHTML = filas.join('');
-    }
-
-    async function obtenerPrestamosActivosUsuario(id, soloCantidad = false) {
-        if (!isNumericValue(id)) {
-            return soloCantidad ? 0 : [];
-        }
-        try {
-            const res = await fetch(`${api.usuarios}/${id}/prestamos/activos`);
-            if (!res.ok) {
-                throw new Error(await res.text());
-            }
-            const data = await res.json();
-            return soloCantidad ? data.length : data;
-        } catch (error) {
-            if (!soloCantidad) {
-                setMessage('usuarios-msg', error.message, 'error');
-            }
-            return soloCantidad ? 0 : [];
-        }
-    }
-
-    async function registrarUsuario(event) {
-        event.preventDefault();
-        const payload = Object.fromEntries(new FormData(event.target));
-        try {
-            const res = await fetch(api.usuarios, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if (!res.ok) {
-                throw new Error(await parseResponse(res));
-            }
-            event.target.reset();
-            setMessage('usuarios-msg', 'Usuario registrado correctamente', 'success');
-            await cargarUsuarios();
-        } catch (error) {
-            setMessage('usuarios-msg', error.message || 'No se pudo registrar el usuario', 'error');
-        }
-    }
-
-    async function consultarUsuario() {
-        const id = document.getElementById('consultar-usuario-id').value;
-        if (!isNumericValue(id)) {
-            setMessage('usuario-detalle', 'Ingresa un ID valido', 'error');
-            return;
-        }
-        try {
-            const res = await fetch(`${api.usuarios}/${id}`);
-            if (!res.ok) {
-                throw new Error(await res.text() || 'Usuario no encontrado');
-            }
-            const data = await res.json();
-            setMessage('usuario-detalle', `Usuario: ${data.nombre} | Email: ${data.email} | Tel: ${data.telefono ?? '-'}`, 'success');
-        } catch (error) {
-            setMessage('usuario-detalle', error.message, 'error');
-        }
-    }
-
-    async function validarPuedePrestar() {
-        const id = document.getElementById('consultar-usuario-id').value;
-        if (!isNumericValue(id)) {
-            setMessage('usuario-detalle', 'Ingresa un ID valido', 'error');
-            return;
-        }
-        try {
-            const res = await fetch(`${api.usuarios}/${id}/puede-prestar`);
-            if (!res.ok) {
-                throw new Error(await res.text());
-            }
-            const data = await res.json();
-            setMessage('usuario-detalle', data.puedePrestar ? 'Puede realizar un nuevo prestamo.' : 'No puede prestar (RN001).', data.puedePrestar ? 'success' : 'error');
-        } catch (error) {
-            setMessage('usuario-detalle', error.message, 'error');
-        }
-    }
-
-    async function cargarPrestamosActivos() {
-        try {
-            const res = await fetch(`${api.prestamos}/activos`);
-            if (!res.ok) {
-                throw new Error(await res.text());
-            }
-            const data = await res.json();
-            renderPrestamos(data);
-            updateSummary('prestamosActivos', data.length);
-            setMessage('prestamos-msg', `${data.length} prestamo(s) activo(s)`, 'success');
-        } catch (error) {
-            renderPrestamos([]);
-            updateSummary('prestamosActivos', 0);
-            setMessage('prestamos-msg', error.message, 'error');
-        }
-    }
-
-    function renderPrestamos(prestamos) {
-        const body = document.getElementById('tabla-prestamos');
-        if (!body) {
-            return;
-        }
-        body.innerHTML = '';
-        if (!Array.isArray(prestamos) || prestamos.length === 0) {
-            body.innerHTML = '<tr><td colspan="6">Sin registros</td></tr>';
-            return;
-        }
-        prestamos.forEach((prestamo) => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${prestamo.id ?? '-'}</td>
-                <td>${prestamo.usuarioId}</td>
-                <td>${prestamo.libroIsbn}</td>
-                <td>${prestamo.fechaPrestamo ?? '-'}</td>
-                <td>${prestamo.fechaDevolucion ?? '-'}</td>
-                <td>${prestamo.estado ? '<span class="tag available">Activo</span>' : '<span class="tag unavailable">Devuelto</span>'}</td>
-            `;
-            body.appendChild(tr);
+async function registrarUsuario(event) {
+    event.preventDefault();
+    const payload = Object.fromEntries(new FormData(event.target));
+    try {
+        const res = await fetch(api.usuarios, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
         });
-    }
-
-    async function crearPrestamo(event) {
-        event.preventDefault();
-        const data = Object.fromEntries(new FormData(event.target));
-        data.usuarioId = Number(data.usuarioId);
-        try {
-            const res = await fetch(api.prestamos, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            if (!res.ok) {
-                throw new Error(await parseResponse(res));
-            }
-            event.target.reset();
-            setMessage('prestamos-msg', 'Prestamo registrado correctamente', 'success');
-            await cargarPrestamosActivos();
-            await cargarLibros();
-            await cargarUsuarios();
-        } catch (error) {
-            setMessage('prestamos-msg', error.message, 'error');
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
         }
+        event.target.reset();
+        setMessage('usuarios-msg', 'Usuario registrado correctamente', 'success');
+        await cargarUsuarios();
+    } catch (error) {
+        setMessage('usuarios-msg', error.message || 'No se pudo registrar el usuario', 'error');
     }
+}
 
-    async function devolverPrestamo(event) {
-        event.preventDefault();
-        const data = Object.fromEntries(new FormData(event.target));
-        data.usuarioId = Number(data.usuarioId);
-        try {
-            const res = await fetch(`${api.prestamos}/devolver`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            if (!res.ok) {
-                throw new Error(await parseResponse(res));
-            }
-            event.target.reset();
-            setMessage('prestamos-msg', 'Devolucion registrada correctamente', 'success');
-            await cargarPrestamosActivos();
-            await cargarLibros();
-            await cargarUsuarios();
-        } catch (error) {
-            setMessage('prestamos-msg', error.message, 'error');
-        }
+async function consultarUsuario() {
+    const id = document.getElementById('consultar-usuario-id').value;
+    if (!isNumericValue(id)) {
+        setMessage('usuario-detalle', 'Ingresa un ID valido', 'error');
+        return;
     }
-
-    async function verPrestamosUsuario(tipo) {
-        const id = document.getElementById('prestamos-usuario-id').value;
-        if (!isNumericValue(id)) {
-            setMessage('prestamos-msg', 'Ingresa un ID de usuario', 'error');
-            return;
+    try {
+        const res = await fetch(`${api.usuarios}/${id}`);
+        if (!res.ok) {
+            throw new Error(await res.text() || 'Usuario no encontrado');
         }
-        const endpoint = tipo === 'historial' ? 'historial' : 'activos';
-        try {
-            const res = await fetch(`${api.prestamos}/usuario/${id}/${endpoint}`);
-            if (!res.ok) {
-                throw new Error(await res.text());
-            }
-            const data = await res.json();
-            renderPrestamos(data);
-            setMessage('prestamos-msg', `${data.length} registro(s) encontrados`, 'success');
-        } catch (error) {
-            renderPrestamos([]);
-            setMessage('prestamos-msg', error.message, 'error');
-        }
+        const data = await res.json();
+        setMessage('usuario-detalle', `Usuario: ${data.nombre} | Email: ${data.email} | Tel: ${data.telefono ?? '-'}`, 'success');
+    } catch (error) {
+        setMessage('usuario-detalle', error.message, 'error');
     }
+}
 
-    async function verLibrosDisponiblesDesdePrestamos() {
-        try {
-            const res = await fetch(`${api.prestamos}/libros-disponibles`);
-            if (!res.ok) {
-                throw new Error(await res.text());
-            }
-            const data = await res.json();
-            renderLibros(data);
-            updateSummary('librosDisponibles', data.length);
-            setMessage('libros-msg', `${data.length} libro(s) disponibles para prestamo`, 'success');
-            setMessage('prestamos-msg', 'Mostrando libros disponibles para prestamo', 'success');
-        } catch (error) {
-            setMessage('prestamos-msg', error.message, 'error');
-        }
+async function validarPuedePrestar() {
+    const id = document.getElementById('consultar-usuario-id').value;
+    if (!isNumericValue(id)) {
+        setMessage('usuario-detalle', 'Ingresa un ID valido', 'error');
+        return;
     }
+    try {
+        const res = await fetch(`${api.usuarios}/${id}/puede-prestar`);
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        const data = await res.json();
+        setMessage('usuario-detalle', data.puedePrestar ? 'Puede realizar un nuevo prestamo.' : 'No puede prestar (RN001).', data.puedePrestar ? 'success' : 'error');
+    } catch (error) {
+        setMessage('usuario-detalle', error.message, 'error');
+    }
+}
 
-    window.addEventListener('DOMContentLoaded', () => {
-        initNavigation();
-        limpiarEdicionLibro();
-        cargarLibros();
-        cargarUsuarios();
-        cargarPrestamosActivos();
+async function cargarPrestamosActivos() {
+    try {
+        const res = await fetch(`${api.prestamos}/activos`);
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        const data = await res.json();
+        renderPrestamos(data);
+        updateSummary('prestamosActivos', data.length);
+        setMessage('prestamos-msg', `${data.length} prestamo(s) activo(s)`, 'success');
+    } catch (error) {
+        renderPrestamos([]);
+        updateSummary('prestamosActivos', 0);
+        setMessage('prestamos-msg', error.message, 'error');
+    }
+}
 
-        document.getElementById('form-crear-libro').addEventListener('submit', registrarLibro);
-        document.getElementById('form-buscar-libro').addEventListener('submit', (event) => {
-            event.preventDefault();
-            const termino = new FormData(event.target).get('termino')?.trim();
-            cargarLibros(termino);
-        });
-        document.getElementById('btn-refrescar-libros').addEventListener('click', () => {
-            document.getElementById('form-buscar-libro').reset();
-            cargarLibros();
-        });
-        document.getElementById('form-actualizar-libro').addEventListener('submit', actualizarLibro);
-        document.getElementById('btn-cancelar-edicion').addEventListener('click', limpiarEdicionLibro);
-
-        document.getElementById('form-crear-usuario').addEventListener('submit', registrarUsuario);
-        document.getElementById('btn-consultar-usuario').addEventListener('click', consultarUsuario);
-        document.getElementById('btn-puede-prestar').addEventListener('click', validarPuedePrestar);
-
-        document.getElementById('form-crear-prestamo').addEventListener('submit', crearPrestamo);
-        document.getElementById('form-devolver').addEventListener('submit', devolverPrestamo);
-        document.getElementById('btn-ver-activos').addEventListener('click', cargarPrestamosActivos);
-        document.getElementById('btn-ver-activos-usuario').addEventListener('click', () => verPrestamosUsuario('activos'));
-        document.getElementById('btn-ver-historial-usuario').addEventListener('click', () => verPrestamosUsuario('historial'));
-        document.getElementById('btn-libros-disponibles').addEventListener('click', verLibrosDisponiblesDesdePrestamos);
+function renderPrestamos(prestamos) {
+    const body = document.getElementById('tabla-prestamos');
+    if (!body) {
+        return;
+    }
+    body.innerHTML = '';
+    if (!Array.isArray(prestamos) || prestamos.length === 0) {
+        body.innerHTML = '<tr><td colspan="6">Sin registros</td></tr>';
+        return;
+    }
+    prestamos.forEach((prestamo) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${prestamo.id ?? '-'}</td>
+            <td>${prestamo.usuarioId}</td>
+            <td>${prestamo.libroIsbn}</td>
+            <td>${prestamo.fechaPrestamo ?? '-'}</td>
+            <td>${prestamo.fechaDevolucion ?? '-'}</td>
+            <td>${prestamo.estado ? '<span class="tag available">Activo</span>' : '<span class="tag unavailable">Devuelto</span>'}</td>
+        `;
+        body.appendChild(tr);
     });
+}
+
+async function crearPrestamo(event) {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.target));
+    data.usuarioId = Number(data.usuarioId);
+    try {
+        const res = await fetch(api.prestamos, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
+        }
+        event.target.reset();
+        setMessage('prestamos-msg', 'Prestamo registrado correctamente', 'success');
+        await cargarPrestamosActivos();
+        await cargarLibros();
+        await cargarUsuarios();
+    } catch (error) {
+        setMessage('prestamos-msg', error.message, 'error');
+    }
+}
+
+async function devolverPrestamo(event) {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.target));
+    data.usuarioId = Number(data.usuarioId);
+    try {
+        const res = await fetch(`${api.prestamos}/devolver`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!res.ok) {
+            throw new Error(await parseResponse(res));
+        }
+        event.target.reset();
+        setMessage('prestamos-msg', 'Devolucion registrada correctamente', 'success');
+        await cargarPrestamosActivos();
+        await cargarLibros();
+        await cargarUsuarios();
+    } catch (error) {
+        setMessage('prestamos-msg', error.message, 'error');
+    }
+}
+
+async function verPrestamosUsuario(tipo) {
+    const id = document.getElementById('prestamos-usuario-id').value;
+    if (!isNumericValue(id)) {
+        setMessage('prestamos-msg', 'Ingresa un ID de usuario', 'error');
+        return;
+    }
+    const endpoint = tipo === 'historial' ? 'historial' : 'activos';
+    try {
+        const res = await fetch(`${api.prestamos}/usuario/${id}/${endpoint}`);
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        const data = await res.json();
+        renderPrestamos(data);
+        setMessage('prestamos-msg', `${data.length} registro(s) encontrados`, 'success');
+    } catch (error) {
+        renderPrestamos([]);
+        setMessage('prestamos-msg', error.message, 'error');
+    }
+}
+
+async function verLibrosDisponiblesDesdePrestamos() {
+    try {
+        const res = await fetch(`${api.prestamos}/libros-disponibles`);
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        const data = await res.json();
+        renderLibros(data);
+        updateSummary('librosDisponibles', data.length);
+        setMessage('libros-msg', `${data.length} libro(s) disponibles para prestamo`, 'success');
+        setMessage('prestamos-msg', 'Mostrando libros disponibles para prestamo', 'success');
+    } catch (error) {
+        setMessage('prestamos-msg', error.message, 'error');
+    }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    initNavigation();
+    limpiarEdicionLibro();
+    cargarLibros();
+    cargarUsuarios();
+    cargarPrestamosActivos();
+    cargarReportes();
+
+    document.getElementById('form-crear-libro').addEventListener('submit', registrarLibro);
+    document.getElementById('form-buscar-libro').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const termino = new FormData(event.target).get('termino')?.trim();
+        cargarLibros(termino);
+    });
+    document.getElementById('btn-refrescar-libros').addEventListener('click', () => {
+        document.getElementById('form-buscar-libro').reset();
+        cargarLibros();
+    });
+    document.getElementById('form-actualizar-libro').addEventListener('submit', actualizarLibro);
+    document.getElementById('btn-cancelar-edicion').addEventListener('click', limpiarEdicionLibro);
+
+    document.getElementById('form-crear-usuario').addEventListener('submit', registrarUsuario);
+    document.getElementById('btn-consultar-usuario').addEventListener('click', consultarUsuario);
+    document.getElementById('btn-puede-prestar').addEventListener('click', validarPuedePrestar);
+
+    document.getElementById('form-crear-prestamo').addEventListener('submit', crearPrestamo);
+    document.getElementById('form-devolver').addEventListener('submit', devolverPrestamo);
+    document.getElementById('btn-ver-activos').addEventListener('click', cargarPrestamosActivos);
+    document.getElementById('btn-ver-activos-usuario').addEventListener('click', () => verPrestamosUsuario('activos'));
+    document.getElementById('btn-ver-historial-usuario').addEventListener('click', () => verPrestamosUsuario('historial'));
+    document.getElementById('btn-libros-disponibles').addEventListener('click', verLibrosDisponiblesDesdePrestamos);
+
+    document.getElementById('form-crear-reporte').addEventListener('submit', crearReporte);
+    document.getElementById('form-filtro-reportes').addEventListener('submit', (event) => {
+        event.preventDefault();
+        cargarReportes(obtenerFiltrosReportes());
+    });
+    document.getElementById('btn-exportar-csv').addEventListener('click', () => exportarReportesCsv(obtenerFiltrosReportes()));
+    document.getElementById('btn-reset-reportes').addEventListener('click', () => {
+        document.getElementById('form-filtro-reportes').reset();
+        cargarReportes();
+    });
+    document.getElementById('btn-generar-resumen').addEventListener('click', generarResumen);
+});
 </script>
 </body>
 </html>
