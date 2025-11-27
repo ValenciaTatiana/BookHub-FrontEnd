@@ -1,21 +1,31 @@
 package com.bookhub.cliente.prestamos;
 
 import com.bookhub.dto.PrestamoResponse;
-
-import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
+import java.awt.GridLayout;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.List;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JTabbedPane;
+import javax.swing.JTable;
+import javax.swing.JTextField;
+import javax.swing.JScrollPane;
+import javax.swing.table.DefaultTableModel;
 
 public class PrestamoFrame extends JFrame {
 
     private final PrestamoApiClient apiClient;
 
-    private JTextField txtUsuarioId;
+    private JTextField txtUsuarioCedula;
     private JTextField txtLibroIsbn;
     private JTextField txtFechaDevolucion;
 
@@ -23,6 +33,8 @@ public class PrestamoFrame extends JFrame {
     private JTable tablaHistorial;
 
     private final DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE;
+    private List<PrestamoResponse> cacheActivos = Collections.emptyList();
+    private List<PrestamoResponse> cacheHistorial = Collections.emptyList();
 
     public PrestamoFrame() {
         this.apiClient = new PrestamoApiClient("http://localhost:8080");
@@ -31,7 +43,7 @@ public class PrestamoFrame extends JFrame {
     }
 
     private void initComponents() {
-        setTitle("BookHub - Módulo Préstamos");
+        setTitle("BookHub - Modulo Prestamos");
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setSize(900, 600);
         setLocationRelativeTo(null);
@@ -39,19 +51,19 @@ public class PrestamoFrame extends JFrame {
 
         JPanel panelFormulario = new JPanel(new GridLayout(2, 4, 8, 5));
 
-        panelFormulario.add(new JLabel("Usuario ID:"));
-        txtUsuarioId = new JTextField();
-        panelFormulario.add(txtUsuarioId);
+        panelFormulario.add(new JLabel("Usuario (cedula):"));
+        txtUsuarioCedula = new JTextField();
+        panelFormulario.add(txtUsuarioCedula);
 
         panelFormulario.add(new JLabel("Libro ISBN:"));
         txtLibroIsbn = new JTextField();
         panelFormulario.add(txtLibroIsbn);
 
-        panelFormulario.add(new JLabel("Fecha devolución (yyyy-MM-dd):"));
+        panelFormulario.add(new JLabel("Fecha devolucion (yyyy-MM-dd):"));
         txtFechaDevolucion = new JTextField();
         panelFormulario.add(txtFechaDevolucion);
 
-        JLabel lblInfoFecha = new JLabel("Hoy ≤ devolución ≤ hoy+15 días");
+        JLabel lblInfoFecha = new JLabel("Hoy -> devolucion -> hoy+15 dias");
         panelFormulario.add(lblInfoFecha);
 
         add(panelFormulario, BorderLayout.NORTH);
@@ -60,15 +72,15 @@ public class PrestamoFrame extends JFrame {
 
         tablaActivos = new JTable(
                 new DefaultTableModel(
-                        new Object[]{"ID", "Usuario", "ISBN", "F. Préstamo", "F. Devolución", "Estado"}, 0
+                        new Object[]{"ID", "Cedula", "ISBN", "F. Prestamo", "F. Devolucion", "Estado"}, 0
                 )
         );
         JScrollPane scrollActivos = new JScrollPane(tablaActivos);
-        tabs.addTab("Préstamos Activos", scrollActivos);
+        tabs.addTab("Prestamos Activos", scrollActivos);
 
         tablaHistorial = new JTable(
                 new DefaultTableModel(
-                        new Object[]{"ID", "Usuario", "ISBN", "F. Préstamo", "F. Devolución", "Estado"}, 0
+                        new Object[]{"ID", "Cedula", "ISBN", "F. Prestamo", "F. Devolucion", "Estado"}, 0
                 )
         );
         JScrollPane scrollHistorial = new JScrollPane(tablaHistorial);
@@ -78,11 +90,11 @@ public class PrestamoFrame extends JFrame {
 
         JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT));
 
-        JButton btnCrear = new JButton("Crear préstamo");
+        JButton btnCrear = new JButton("Crear prestamo");
         btnCrear.addActionListener(e -> onCrearPrestamo());
         panelBotones.add(btnCrear);
 
-        JButton btnDevolver = new JButton("Devolver préstamo");
+        JButton btnDevolver = new JButton("Devolver prestamo");
         btnDevolver.addActionListener(e -> onDevolverPrestamo());
         panelBotones.add(btnDevolver);
 
@@ -98,66 +110,76 @@ public class PrestamoFrame extends JFrame {
     }
 
     private void onCrearPrestamo() {
-        String usuarioIdStr = txtUsuarioId.getText().trim();
+        String usuarioCedula = txtUsuarioCedula.getText().trim();
         String isbn = txtLibroIsbn.getText().trim();
         String fechaDevStr = txtFechaDevolucion.getText().trim();
 
-        if (usuarioIdStr.isEmpty() || isbn.isEmpty() || fechaDevStr.isEmpty()) {
+        if (usuarioCedula.isEmpty() || isbn.isEmpty() || fechaDevStr.isEmpty()) {
             mostrarError("Todos los campos son obligatorios.");
             return;
         }
 
-        if (!usuarioIdStr.matches("\\d+")) {
-            mostrarError("El Usuario ID debe ser numérico.");
+        if (!usuarioCedula.matches("\\d+")) {
+            mostrarError("La cedula debe ser numerica.");
             return;
         }
-
-        int usuarioId = Integer.parseInt(usuarioIdStr);
 
         LocalDate hoy = LocalDate.now();
         LocalDate fechaDev;
         try {
             fechaDev = LocalDate.parse(fechaDevStr, formatter);
         } catch (DateTimeParseException ex) {
-            mostrarError("La fecha de devolución debe tener el formato yyyy-MM-dd.");
+            mostrarError("La fecha de devolucion debe tener el formato yyyy-MM-dd.");
             return;
         }
 
         if (fechaDev.isBefore(hoy)) {
-            mostrarError("La fecha de devolución no puede ser anterior a hoy.");
+            mostrarError("La fecha de devolucion no puede ser anterior a hoy.");
             return;
         }
 
         if (fechaDev.isAfter(hoy.plusDays(15))) {
-            mostrarError("La fecha de devolución no puede superar los 15 días.");
+            mostrarError("La fecha de devolucion no puede superar los 15 dias.");
             return;
         }
 
         try {
-            apiClient.crearPrestamo(usuarioId, isbn, hoy, fechaDev);
-            mostrarInfo("Préstamo creado correctamente.");
+            apiClient.crearPrestamo(usuarioCedula, isbn, hoy, fechaDev);
+            mostrarInfo("Prestamo creado correctamente.");
             cargarPrestamos();
         } catch (Exception ex) {
-            mostrarError("Error creando préstamo: " + ex.getMessage());
+            mostrarError("Error creando prestamo: " + ex.getMessage());
         }
     }
 
     private void onDevolverPrestamo() {
         int fila = tablaActivos.getSelectedRow();
         if (fila == -1) {
-            mostrarError("Seleccione un préstamo.");
+            mostrarError("Seleccione un prestamo.");
             return;
         }
 
-        int usuarioId = Integer.parseInt(tablaActivos.getValueAt(fila, 1).toString());
-        String isbn = tablaActivos.getValueAt(fila, 2).toString();
+        int modelRow = tablaActivos.convertRowIndexToModel(fila);
+        if (modelRow < 0 || modelRow >= cacheActivos.size()) {
+            mostrarError("No se encontro el registro seleccionado.");
+            return;
+        }
+
+        PrestamoResponse seleccionado = cacheActivos.get(modelRow);
+        String usuarioCedula = seleccionado.getUsuarioCedula();
+        String isbn = seleccionado.getLibroIsbn();
+
+        if (usuarioCedula == null || usuarioCedula.isBlank()) {
+            mostrarError("No se pudo obtener la cedula del usuario del prestamo seleccionado.");
+            return;
+        }
 
         try {
-            apiClient.devolverPrestamo(usuarioId, isbn);
-            mostrarInfo("Préstamo devuelto correctamente.");
+            apiClient.devolverPrestamo(usuarioCedula, isbn);
+            mostrarInfo("Prestamo devuelto correctamente.");
             cargarPrestamos();
         } catch (Exception ex) {
-            mostrarError("Error devolviendo préstamo: " + ex.getMessage());
+            mostrarError("Error devolviendo prestamo: " + ex.getMessage());
         }
     }
 
@@ -171,11 +193,12 @@ public class PrestamoFrame extends JFrame {
             PrestamoResponse[] activos = apiClient.listarActivos();
             DefaultTableModel model = (DefaultTableModel) tablaActivos.getModel();
             model.setRowCount(0);
+            cacheActivos = Arrays.asList(activos);
 
             for (PrestamoResponse p : activos) {
                 model.addRow(new Object[]{
                         p.getId(),
-                        p.getUsuarioId(),
+                        p.getUsuarioCedula(),
                         p.getLibroIsbn(),
                         p.getFechaPrestamo(),
                         p.getFechaDevolucion(),
@@ -183,7 +206,7 @@ public class PrestamoFrame extends JFrame {
                 });
             }
         } catch (Exception ex) {
-            mostrarError("No se pudieron cargar los préstamos.");
+            mostrarError("No se pudieron cargar los prestamos.");
         }
     }
 
@@ -192,11 +215,12 @@ public class PrestamoFrame extends JFrame {
             PrestamoResponse[] todos = apiClient.listarTodos();
             DefaultTableModel model = (DefaultTableModel) tablaHistorial.getModel();
             model.setRowCount(0);
+            cacheHistorial = Arrays.asList(todos);
 
             for (PrestamoResponse p : todos) {
                 model.addRow(new Object[]{
                         p.getId(),
-                        p.getUsuarioId(),
+                        p.getUsuarioCedula(),
                         p.getLibroIsbn(),
                         p.getFechaPrestamo(),
                         p.getFechaDevolucion(),
@@ -221,7 +245,7 @@ public class PrestamoFrame extends JFrame {
         JOptionPane.showMessageDialog(
                 this,
                 mensaje,
-                "Información",
+                "Informacion",
                 JOptionPane.INFORMATION_MESSAGE
         );
     }

@@ -1,4 +1,4 @@
-package com.bookhub.cliente.prestamos;
+package com.bookhub.ui.prestamos;
 
 import com.bookhub.dto.PrestamoRequest;
 import com.bookhub.dto.PrestamoResponse;
@@ -25,16 +25,16 @@ public class PrestamoApiClient {
 
     public PrestamoResponse[] listarTodos() {
         return client.get()
-                .uri("/api/prestamos/activos")
+                .uri("/api/prestamos/todos")
                 .retrieve()
                 .body(PrestamoResponse[].class);
     }
 
-    public PrestamoResponse crearPrestamo(int usuarioId, String isbn,
+    public PrestamoResponse crearPrestamo(String usuarioCedula, String isbn,
                                           LocalDate fechaPrestamo, LocalDate fechaDevolucion) {
 
         PrestamoRequest req = new PrestamoRequest(
-                usuarioId,
+                usuarioCedula,
                 isbn,
                 fechaPrestamo,
                 fechaDevolucion
@@ -47,13 +47,18 @@ public class PrestamoApiClient {
                 .body(PrestamoResponse.class);
     }
 
-    public String devolverPrestamo(int usuarioId, String isbn) {
+    public String devolverPrestamo(String usuarioCedula, String isbn) {
+
+        PrestamoRequest req = new PrestamoRequest(
+                usuarioCedula,
+                isbn,
+                null,
+                null
+        );
+
         return client.put()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/api/prestamos/devolver")
-                        .queryParam("usuarioId", usuarioId)
-                        .queryParam("libroIsbn", isbn)
-                        .build())
+                .uri("/api/prestamos/devolver")
+                .body(req)
                 .retrieve()
                 .body(String.class);
     }
